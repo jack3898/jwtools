@@ -22,7 +22,7 @@ export default {
   lintSemverRanges: false, // The catalog in pnpm should do us fine for a while
   versionGroups: [
     {
-      dependencies: ["@jackwrigatoni/*"],
+      dependencies: ["@jack3898/*"],
       isIgnored: true, // Syncpack gets all wishy-washy with workspace:*
     },
   ],
