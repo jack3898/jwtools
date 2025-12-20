@@ -11,7 +11,7 @@
       ],
       "options": {
         "cwd": "{projectRoot}",
-        "command": "tsc -p tsconfig.build.json"
+        "commands": ["premove dist", "tsc -p tsconfig.build.json"]
       }
     },
     "type-check": {

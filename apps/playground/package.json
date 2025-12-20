@@ -1,0 +1,32 @@
+{
+  "name": "@jack3898/playground",
+  "description": "A playground app for testing jwtools packages. SHOULD NOT BE PUBLISHED.",
+  "version": "1.0.0",
+  "author": "Jack Wright",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "sourceRoot": "{projectRoot}/src",
+    "projectType": "application",
+    "targets": {
+      "dev:lazy-object": {
+        "executor": "nx:run-commands",
+        "options": {
+          "cwd": "{projectRoot}",
+          "command": "tsx watch src/lazy-object/index.ts"
+        }
+      },
+      "type-check": {
+        "defaultConfiguration": "type-check"
+      }
+    }
+  },
+  "dependencies": {
+    "@jack3898/lazy-object": "workspace:^"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "catalog:"
+  },
+  "repository": "jack3898/jwtools.git"
+}

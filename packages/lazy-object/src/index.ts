@@ -1,5 +1,5 @@
-export { createLazyObject as default } from "./create-lazy-object";
+export { lazy as default } from "./lazy";
 
-export * from "./inject-lazy-prop";
-export * from "./create-lazy-object";
+export * from "./lazy-assign";
+export * from "./lazy";
 export * from "./types";

@@ -2,15 +2,16 @@ import type { AnyFn, LazyOpts } from "./types";
 
 /**
  * Given an existing object literal, this utility function will inject a new property into the object that will be lazily evaluated when accessed.
+ * This is a more imperative version of the `lazy` function.
  *
- * **This function will mutate the original object.**
+ * **This function will mutate the original object. It has no return value.**
  *
  * Subsequent calls to the property will return the same value/reference as the first call.
  *
  * @example ```ts
  * const target = { test: "hello" };
  *
- * injectLazyProp(target, "test2", () => "there");
+ * lazyAssign(target, "test2", () => "there");
  *
  * console.log(target.test2); // "there"
  * ```
@@ -19,7 +20,7 @@ import type { AnyFn, LazyOpts } from "./types";
  * @param property The key name of the property to inject
  * @param getter The function that will be called to lazily evaluate the property
  */
-export function injectLazyProp<
+export function lazyAssign<
   T extends Record<PropertyKey, unknown>,
   K extends string,
   F extends AnyFn,

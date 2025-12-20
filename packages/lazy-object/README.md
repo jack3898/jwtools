@@ -4,12 +4,12 @@ A tiny zero-dependency package that lets you define an object literal using a ut
 
 The first access to the property is cached, and then reused for subsequent accesses.
 
-## createLazyObject
+## lazy
 
-The first way is to use `createLazyObject`. This method returns a new object with the lazy properties added in an immutable way.
+The first way is to use `lazy`. This method returns a new object with the lazy properties added in an immutable way.
 
 ```ts
-const lazyObject = createLazyObject({
+const lazyObject = lazy({
   test: () => {
     console.log("Doing something expensive...");
 
@@ -24,7 +24,7 @@ console.log(lazyObject.test);
 You can even merge another object into the lazy object:
 
 ```ts
-const lazyObject = createLazyObject(
+const lazyObject = lazy(
   {
     test: () => {
       console.log("Doing something expensive...");
@@ -36,16 +36,16 @@ const lazyObject = createLazyObject(
 );
 ```
 
-## injectLazyProp
+## assignLazy
 
-The second way is to use `injectLazyProp`. This method will mutate the object passed into it, unlike `createLazyObject`. It does not return anything.
+The second way is to use `assignLazy`. This method will mutate the object passed into it, unlike `assignLazy`. It does not return anything.
 
 ```ts
 const object = {
   test: "hello",
 };
 
-injectLazyProp(object, "test2", () => "there!");
+assignLazy(object, "test2", () => "there!");
 
 // Output: "there!"
 console.log(object.test2);
@@ -55,13 +55,9 @@ console.log(object.test2);
 
 This package is one of the most type-safe packages around lazy property creation.
 
-The `createLazyObject` return type signature is inferred from the return type of all the getter functions.
+The `lazy` return type signature is inferred from the return type of all the getter functions.
 
-The `injectLazyProp` function asserts the type signature of objects passed into it, which means not only does it inject the property at runtime, but at the type level too.
-
-## Give it a spin!
-
-Check out a pre-configured playground [here](https://stackblitz.com/edit/stackblitz-starters-pyenggnw?file=src%2Findex.ts) and give create-lazy-object a spin!
+The `assignLazy` function asserts the type signature of objects passed into it, which means not only does it inject the property at runtime, but at the type level too.
 
 ## Note on module type
 

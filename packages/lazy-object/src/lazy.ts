@@ -1,4 +1,4 @@
-import { injectLazyProp } from "./inject-lazy-prop";
+import { lazyAssign } from "./lazy-assign";
 import type { AnyFn, LazyOpts, ResolvedGetters } from "./types";
 
 /**
@@ -10,7 +10,7 @@ import type { AnyFn, LazyOpts, ResolvedGetters } from "./types";
  *
  * @example ```ts
  * // Pretend these are expensive operations
- * const lazyObject = createLazyObject({
+ * const lazyObject = lazy({
  *   test: () => true,
  *   test2: () => false,
  * });
@@ -23,7 +23,7 @@ import type { AnyFn, LazyOpts, ResolvedGetters } from "./types";
  * @param mergeWith An optional non-lazy standard object to merge the lazy object with
  * @returns The new object that will lazily evaluate the properties when accessed
  */
-export function createLazyObject<
+export function lazy<
   T extends Record<string, AnyFn>,
   M extends Record<PropertyKey, unknown> = Record<never, unknown>,
 >(
@@ -40,7 +40,7 @@ export function createLazyObject<
   };
 
   for (const [key, getter] of Object.entries(getters)) {
-    injectLazyProp(result, key, getter, opts);
+    lazyAssign(result, key, getter, opts);
   }
 
   return result;

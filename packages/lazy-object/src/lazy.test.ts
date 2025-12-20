@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createLazyObject } from "./create-lazy-object";
+import { lazy } from "./lazy";
 
 describe("createLazyObject", () => {
   it("should get a property", () => {
     const value = true;
 
-    const lazyObject = createLazyObject({ test: () => value });
+    const lazyObject = lazy({ test: () => value });
 
     expect(lazyObject.test).toBe(value);
   });
@@ -14,7 +14,7 @@ describe("createLazyObject", () => {
     const object = true;
     const setted = false;
 
-    const lazyObject = createLazyObject({ test: () => object });
+    const lazyObject = lazy({ test: () => object });
 
     lazyObject.test = setted;
 
@@ -24,7 +24,7 @@ describe("createLazyObject", () => {
   it("should cache getting a property", () => {
     const getter = vi.fn().mockImplementation(() => crypto.randomUUID());
 
-    const lazyObject = createLazyObject({ test: getter });
+    const lazyObject = lazy({ test: getter });
 
     const result1 = lazyObject.test;
     const result2 = lazyObject.test;
@@ -35,14 +35,14 @@ describe("createLazyObject", () => {
   });
 
   it("should check if a the object has a property", () => {
-    const lazyObject = createLazyObject({ test: () => false });
+    const lazyObject = lazy({ test: () => false });
 
     expect("test" in lazyObject).toBe(true);
   });
 
   it("should pre-compute the value when checking if a property exists", () => {
     const getter = vi.fn();
-    const lazyObject = createLazyObject({ test: () => getter() });
+    const lazyObject = lazy({ test: () => getter() });
 
     expect("test" in lazyObject).toBe(true);
 
@@ -54,7 +54,7 @@ describe("createLazyObject", () => {
   });
 
   it("should get the keys of the lazy object", () => {
-    const lazyObject = createLazyObject({
+    const lazyObject = lazy({
       test: () => true,
       test2: () => false,
     });
@@ -63,7 +63,7 @@ describe("createLazyObject", () => {
   });
 
   it("should get the values for the lazy object", () => {
-    const lazyObject = createLazyObject({
+    const lazyObject = lazy({
       test: () => true,
       test2: () => false,
     });
@@ -74,7 +74,7 @@ describe("createLazyObject", () => {
   it("should delete a property from the cache", () => {
     const getter = vi.fn();
 
-    const lazyObject = createLazyObject({
+    const lazyObject = lazy({
       test: () => getter(),
     });
 
@@ -89,7 +89,7 @@ describe("createLazyObject", () => {
   });
 
   it("should represent an object if it's used in whole", () => {
-    const lazyObject = createLazyObject({
+    const lazyObject = lazy({
       test: () => true,
       test2: () => false,
       test3: () => ({ key: "value" }),
@@ -105,7 +105,7 @@ describe("createLazyObject", () => {
   });
 
   it("should allow a merge with a custom object", () => {
-    const lazyObject = createLazyObject({ test: () => true }, { test2: false });
+    const lazyObject = lazy({ test: () => true }, { test2: false });
 
     expect(lazyObject).toEqual({
       test: true,
@@ -115,17 +115,14 @@ describe("createLazyObject", () => {
 
   it("should not mutate the objected merged with, and return a new object", () => {
     const mergeWith = { test2: false };
-    const lazyObject = createLazyObject({}, mergeWith);
+    const lazyObject = lazy({}, mergeWith);
 
     expect(lazyObject).not.toBe(mergeWith);
   });
 
   it("should still not run the lazy function even when a merge happened", () => {
     const getter = vi.fn();
-    const lazyObject = createLazyObject(
-      { test: () => getter() },
-      { test2: false },
-    );
+    const lazyObject = lazy({ test: () => getter() }, { test2: false });
 
     expect(lazyObject.test2).toBe(false);
     expect(getter).not.toHaveBeenCalled();
