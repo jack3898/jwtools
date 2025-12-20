@@ -1,7 +1,7 @@
 {
   "name": "@jack3898/lazy-object",
   "description": "Lazily loaded objects with properties computed at get-time.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Jack Wright",
   "private": false,
   "type": "module",
