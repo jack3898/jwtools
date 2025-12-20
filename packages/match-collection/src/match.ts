@@ -154,27 +154,3 @@ export function match<T>(
     },
   };
 }
-
-export function walkQueryAst<T>(
-  ast: QueryAst<T>,
-  fn: (node: QueryAst<T>) => void,
-): void {
-  fn(ast);
-
-  switch (ast.kind) {
-    case "and":
-    case "not":
-    case "or": {
-      for (const child of ast.children) {
-        walkQueryAst(child, fn);
-      }
-
-      break;
-    }
-    case "value":
-    case "predicate": {
-      // No children to walk
-      break;
-    }
-  }
-}

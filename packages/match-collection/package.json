@@ -1,7 +1,7 @@
 {
   "name": "@jack3898/match-collection",
   "description": "Run a smart matcher against a collection of items.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Jack Wright",
   "license": "Apache-2.0",
   "private": false,
