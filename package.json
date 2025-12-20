@@ -8,6 +8,7 @@
     "build": "nx run-many -t build",
     "check": "knip && pnpm type-check && biome check",
     "dev": "nx run-many -t dev",
+    "nx": "nx",
     "postinstall": "syncpack format",
     "test": "vitest",
     "type-check": "nx run-many -t type-check"

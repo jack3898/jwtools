@@ -28,6 +28,13 @@
         "cwd": "{projectRoot}",
         "command": "tsc --watch -p tsconfig.build.json"
       }
+    },
+    "publish": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "pnpm publish"
+      }
     }
   }
 }

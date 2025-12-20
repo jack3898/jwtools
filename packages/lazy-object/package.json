@@ -3,6 +3,7 @@
   "description": "Lazily loaded objects with properties computed at get-time.",
   "version": "1.3.4",
   "author": "Jack Wright",
+  "private": false,
   "type": "module",
   "main": "dist/index.js",
   "nx": {
@@ -17,13 +18,20 @@
       },
       "type-check": {
         "defaultConfiguration": "type-check"
+      },
+      "publish": {
+        "defaultConfiguration": "publish"
       }
     }
   },
   "devDependencies": {
     "typescript": "catalog:"
   },
-  "files": ["./dist", "./LICENSE", "./README.md"],
+  "files": [
+    "./dist",
+    "./LICENSE",
+    "./README.md"
+  ],
   "keywords": [
     "define-property",
     "esm",
@@ -40,5 +48,5 @@
     "utility",
     "vanilla"
   ],
-  "repository": "jack3898/create-lazy-object.git"
+  "repository": "jack3898/jwtools.git"
 }
