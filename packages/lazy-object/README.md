@@ -32,13 +32,13 @@ const lazyObject = lazy(
       return 42;
     },
   },
-  { test2: "Not lazy" },
+  { test2: "Not lazy" }
 );
 ```
 
 ## assignLazy
 
-The second way is to use `assignLazy`. This method will mutate the object passed into it, unlike `assignLazy`. It does not return anything.
+The second way is to use `assignLazy`. This method will mutate the object passed into it, unlike `lazy`. It does not return anything.
 
 ```ts
 const object = {

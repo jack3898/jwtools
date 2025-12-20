@@ -1,8 +1,9 @@
 {
   "name": "@jack3898/match-collection",
   "description": "Run a smart matcher against a collection of items.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Jack Wright",
+  "license": "Apache-2.0",
   "private": false,
   "type": "module",
   "main": "dist/index.js",
@@ -41,13 +42,13 @@
     "./README.md"
   ],
   "keywords": [
-    "match",
+    "ast",
     "collection",
+    "match",
     "matcher",
     "query",
-    "ast",
-    "utility",
     "tiny",
+    "utility",
     "vanilla",
     "zero-dependency"
   ],
