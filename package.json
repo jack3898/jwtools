@@ -17,7 +17,6 @@
     "@biomejs/biome": "catalog:",
     "knip": "catalog:",
     "nx": "catalog:",
-    "premove": "^4.0.0",
     "syncpack": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

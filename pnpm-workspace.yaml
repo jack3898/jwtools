@@ -7,7 +7,10 @@ catalog:
   knip: ^5.73.4
   nx: ^22.2.2
   syncpack: ^13.0.4
+  tsup: ^8.5.1
   typescript: 5.9.3
   vitest: ^4.0.15
+
+catalogMode: strict
 
 minimumReleaseAge: 2880

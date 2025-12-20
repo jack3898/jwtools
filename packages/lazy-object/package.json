@@ -28,6 +28,7 @@
     }
   },
   "devDependencies": {
+    "tsup": "catalog:",
     "typescript": "catalog:"
   },
   "files": [
@@ -51,5 +52,6 @@
     "utility",
     "vanilla"
   ],
-  "repository": "jack3898/jwtools.git"
+  "repository": "jack3898/jwtools.git",
+  "types": "./dist/index.d.ts"
 }
