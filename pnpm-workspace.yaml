@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+
+catalog:
+  '@biomejs/biome': ^1.9.4
+  knip: ^5.73.4
+  nx: ^22.2.2
+  syncpack: ^13.0.4
+  typescript: 5.9.3
+  vitest: ^4.0.15
+
+minimumReleaseAge: 2880

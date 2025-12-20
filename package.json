@@ -1,0 +1,25 @@
+{
+  "name": "jwtools",
+  "description": "",
+  "version": "1.0.0",
+  "author": "Jack Wright",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "nx run-many -t build",
+    "check": "knip && pnpm type-check && biome check",
+    "dev": "nx run-many -t dev",
+    "postinstall": "syncpack format",
+    "test": "vitest",
+    "type-check": "nx run-many -t type-check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "knip": "catalog:",
+    "nx": "catalog:",
+    "syncpack": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [],
+  "packageManager": "pnpm@10.17.0"
+}

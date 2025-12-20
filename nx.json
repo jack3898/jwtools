@@ -1,0 +1,33 @@
+{
+  "targetDefaults": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "inputs": [
+        "{projectRoot}/**/*",
+        "!{projectRoot}/dist/**/*",
+        "!{projectRoot}/node_modules/**/*"
+      ],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsc -p tsconfig.build.json"
+      }
+    },
+    "type-check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^type-check"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsc --noEmit"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsc --watch -p tsconfig.build.json"
+      }
+    }
+  }
+}

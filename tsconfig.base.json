@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "target": "es2020"
+  }
+}
