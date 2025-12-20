@@ -41,20 +41,15 @@
     "./README.md"
   ],
   "keywords": [
-    "define-property",
-    "esm",
-    "getter",
-    "inject",
-    "lazy",
-    "lazy-evaluation",
-    "memo",
-    "object",
-    "object-literal",
-    "performance",
-    "persist",
-    "tiny",
+    "match",
+    "collection",
+    "matcher",
+    "query",
+    "ast",
     "utility",
-    "vanilla"
+    "tiny",
+    "vanilla",
+    "zero-dependency"
   ],
   "repository": "jack3898/jwtools.git",
   "types": "./dist/index.d.ts"
