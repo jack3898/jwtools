@@ -29,7 +29,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "tsc --watch -p tsconfig.build.json"
+        "command": "tsup --watch"
       }
     },
     "publish": {

@@ -1,7 +1,7 @@
 {
-  "name": "@jack3898/lazy-object",
-  "description": "Lazily loaded objects with properties computed at get-time.",
-  "version": "2.0.1",
+  "name": "@jack3898/match-collection",
+  "description": "Run a smart matcher against a collection of items.",
+  "version": "1.0.0",
   "author": "Jack Wright",
   "private": false,
   "type": "module",
@@ -28,7 +28,8 @@
     }
   },
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./helpers": "./dist/helpers.js"
   },
   "devDependencies": {
     "tsup": "catalog:",
