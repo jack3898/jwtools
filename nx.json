@@ -33,7 +33,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "pnpm publish"
+        "command": "pnpm publish --access public"
       }
     }
   }
