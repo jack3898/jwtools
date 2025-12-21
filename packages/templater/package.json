@@ -1,0 +1,56 @@
+{
+  "name": "@jack3898/templater",
+  "description": "Use type-safe template strings to generate text content.",
+  "version": "1.0.0",
+  "author": "Jack Wright",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "nx": {
+    "sourceRoot": "{projectRoot}/src",
+    "projectType": "library",
+    "targets": {
+      "build": {
+        "defaultConfiguration": "build"
+      },
+      "prepack": {
+        "defaultConfiguration": "build"
+      },
+      "dev": {
+        "defaultConfiguration": "dev"
+      },
+      "type-check": {
+        "defaultConfiguration": "type-check"
+      },
+      "publish": {
+        "defaultConfiguration": "publish"
+      }
+    }
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  },
+  "files": [
+    "./dist",
+    "./LICENSE",
+    "./README.md"
+  ],
+  "keywords": [
+    "ast",
+    "collection",
+    "match",
+    "matcher",
+    "query",
+    "tiny",
+    "utility",
+    "vanilla",
+    "zero-dependency"
+  ],
+  "repository": "jack3898/jwtools.git",
+  "types": "./dist/index.d.ts"
+}

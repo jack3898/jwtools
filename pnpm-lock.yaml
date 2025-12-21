@@ -59,6 +59,9 @@ importers:
       '@jack3898/match-collection':
         specifier: workspace:^
         version: link:../../packages/match-collection
+      '@jack3898/templater':
+        specifier: workspace:^
+        version: link:../../packages/templater
     devDependencies:
       tsx:
         specifier: ^4.21.0
@@ -77,6 +80,15 @@ importers:
         version: 5.9.3
 
   packages/match-collection:
+    devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/templater:
     devDependencies:
       tsup:
         specifier: 'catalog:'

@@ -23,6 +23,13 @@
           "command": "tsx watch src/match-collection/index.ts"
         }
       },
+      "dev:templater": {
+        "executor": "nx:run-commands",
+        "options": {
+          "cwd": "{projectRoot}",
+          "command": "tsx watch src/templater/index.ts"
+        }
+      },
       "type-check": {
         "defaultConfiguration": "type-check"
       }
@@ -30,7 +37,8 @@
   },
   "dependencies": {
     "@jack3898/lazy-object": "workspace:^",
-    "@jack3898/match-collection": "workspace:^"
+    "@jack3898/match-collection": "workspace:^",
+    "@jack3898/templater": "workspace:^"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
