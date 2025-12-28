@@ -41,15 +41,12 @@
     "./README.md"
   ],
   "keywords": [
-    "ast",
-    "collection",
-    "match",
-    "matcher",
-    "query",
-    "tiny",
-    "utility",
-    "vanilla",
-    "zero-dependency"
+    "templater",
+    "strings",
+    "type-safe",
+    "template",
+    "template strings",
+    "text generation"
   ],
   "repository": "jack3898/jwtools.git",
   "types": "./dist/index.d.ts"
