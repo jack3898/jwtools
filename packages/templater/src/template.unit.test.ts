@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { template } from "./template.js";
+import { $, template } from "./template.js";
 
 it("should template a string by itself", () => {
   const exec = template`${"test"}`;
@@ -71,4 +71,18 @@ it("should work with empty strings", () => {
       four: "",
     }),
   ).toMatchInlineSnapshot(`"    "`);
+});
+
+it("should support the $ symbol", () => {
+  const positional = template`Hello, ${$}! ${$}`;
+
+  expect(positional(["world", "How are you?"])).toBe(
+    "Hello, world! How are you?",
+  );
+});
+
+it("should allow for an index", () => {
+  const indexed = template`Hello, ${0}! ${1}`;
+
+  expect(indexed(["world", "How are you?"])).toBe("Hello, world! How are you?");
 });
