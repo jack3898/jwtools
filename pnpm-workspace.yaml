@@ -13,4 +13,9 @@ catalog:
 
 catalogMode: strict
 
+ignoredBuiltDependencies:
+  - '@biomejs/biome'
+  - esbuild
+  - nx
+
 minimumReleaseAge: 2880
