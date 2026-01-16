@@ -6,6 +6,7 @@ A collection of TypeScript utilities and libraries that I find useful for myself
 
 - [@jack3898/lazy-object](./packages/lazy-object/README.md): Lazily loaded objects with properties computed at get-time.
 - [@jack3898/match-collection](./packages/match-collection/README.md): A tiny zero-dependency package that lets you match whether a list of items meets a very specific condition.
+- [@jack3898/templater](./packages/templater/README.md): A tiny zero-dependency package for creating type-safe string templates using plain old template literals.
 
 ## Contributing
 
