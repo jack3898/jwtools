@@ -113,3 +113,126 @@ it("should allow for spaces in a value without quotes with a comment", () => {
     new Comment("This is a comment"),
   ]);
 });
+
+it("should not drop the first character of a comment (regression)", () => {
+  const input = `# Hello`;
+  const scanner = new Scanner(input);
+
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([new Comment("Hello")]);
+});
+
+it("should increment line count after a full-line comment so later errors report the correct line", () => {
+  const input = `# comment
+KEY@VALUE`;
+
+  const scanner = new Scanner(input);
+
+  expect(() => scanner.scan()).toThrowError(
+    "ScannerError: Unexpected character '@' in key at position 12 on line 2",
+  );
+});
+
+it("should preserve an empty comment line (a single #) as an empty Comment token", () => {
+  const input = `#
+KEY=VALUE`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Comment(""),
+    new Key("KEY"),
+    new Operator("="),
+    new Value("VALUE"),
+  ]);
+});
+
+it("should not treat # as a comment when it is part of an unquoted value (no whitespace before #)", () => {
+  const input = `URL=https://example.com/path#section`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("URL"),
+    new Operator("="),
+    new Value("https://example.com/path#section"),
+  ]);
+});
+
+it("should not treat # as a comment when attached directly to the value (no whitespace before #)", () => {
+  const input = `KEY=abc#def`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("abc#def"),
+  ]);
+});
+
+it("should treat # as an inline comment when preceded by whitespace", () => {
+  const input = `KEY=abc #def`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("abc"),
+    new Comment("def"),
+  ]);
+});
+
+it("should never treat # as an inline comment inside quoted values", () => {
+  const input = `KEY="abc #def" # real comment`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("abc #def", '"'),
+    new Comment("real comment"),
+  ]);
+});
+
+/**
+ * QUOTING EDGE CASES
+ */
+
+it("should throw if there are non-whitespace characters after a closing quote before newline/comment", () => {
+  const input = `KEY="abc"def`;
+
+  const scanner = new Scanner(input);
+
+  expect(() => scanner.scan()).toThrowError(
+    "ScannerError: Unexpected character 'd' after closing quote at position 9 on line 1",
+  );
+});
+
+/**
+ * NEWLINES
+ */
+
+it("should support Windows newlines (CRLF) without including \\r in the value", () => {
+  const input = "KEY1=VALUE1\r\nKEY2=VALUE2\r\n";
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY1"),
+    new Operator("="),
+    new Value("VALUE1"),
+    new Key("KEY2"),
+    new Operator("="),
+    new Value("VALUE2"),
+  ]);
+});
