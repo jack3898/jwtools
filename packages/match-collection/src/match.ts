@@ -1,4 +1,4 @@
-import type { Query, QueryAst, PredicateFn } from "./types";
+import type { PredicateFn, Query, QueryAst } from "./types";
 import { isQuery, makeQuery } from "./utils";
 
 function criterionToAst<T>(criterion: Query<T> | T): QueryAst<T> {

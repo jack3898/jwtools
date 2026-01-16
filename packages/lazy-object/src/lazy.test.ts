@@ -80,7 +80,6 @@ describe("createLazyObject", () => {
 
     lazyObject.test;
 
-    // biome-ignore lint/performance/noDelete: test case
     delete lazyObject.test;
 
     lazyObject.test;

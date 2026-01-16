@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entryPoints: ["src/index.ts", "src/helpers.ts"],
+  entry: ["src/index.ts", "src/helpers.ts"],
   format: ["esm"],
   dts: true,
   clean: true,
