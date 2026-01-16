@@ -1,0 +1,52 @@
+{
+  "name": "@jack3898/env-sync",
+  "description": ".env management turned up to 11. Programmatic env modifiers, syncing, migrations, monorepo support.",
+  "version": "1.0.0",
+  "author": "Jack Wright",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "nx": {
+    "sourceRoot": "{projectRoot}/src",
+    "projectType": "library",
+    "targets": {
+      "build": {
+        "defaultConfiguration": "build"
+      },
+      "prepack": {
+        "defaultConfiguration": "build"
+      },
+      "dev": {
+        "defaultConfiguration": "dev"
+      },
+      "type-check": {
+        "defaultConfiguration": "type-check"
+      },
+      "publish": {
+        "defaultConfiguration": "publish"
+      }
+    }
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  },
+  "files": [
+    "./dist",
+    "./LICENSE",
+    "./README.md"
+  ],
+  "keywords": [
+    "strings",
+    "template",
+    "template strings",
+    "templater",
+    "text generation",
+    "type-safe"
+  ],
+  "repository": "jack3898/jwtools.git",
+  "types": "./dist/index.d.ts"
+}
