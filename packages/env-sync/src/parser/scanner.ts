@@ -152,6 +152,11 @@ export class Scanner {
       if (char === "\n") {
         this.#tokens.push(new Value(value, openedWith));
 
+        // If this newline is the final character in the input, emit an EmptyLine token
+        if (this.isAtEnd()) {
+          this.#tokens.push(new EmptyLine());
+        }
+
         return;
       }
 
