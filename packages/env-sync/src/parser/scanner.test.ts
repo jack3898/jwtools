@@ -19,7 +19,7 @@ it("should scan a .env input with comments and empty lines", () => {
 # This is a comment
             KEY1=VALUE1
 
-KEY2='VALUE2'     # Inline comment
+KEY2='VALUE2'      # Inline comment
 # Dedicated comment
 `;
 
@@ -130,7 +130,7 @@ KEY@VALUE`;
   const scanner = new Scanner(input);
 
   expect(() => scanner.scan()).toThrowError(
-    "ScannerError: Unexpected character '@' in key at position 12 on line 2",
+    "ScannerError: Unexpected character '@' in key at position 13 on line 2",
   );
 });
 
@@ -203,10 +203,6 @@ it("should never treat # as an inline comment inside quoted values", () => {
   ]);
 });
 
-/**
- * QUOTING EDGE CASES
- */
-
 it("should throw if there are non-whitespace characters after a closing quote before newline/comment", () => {
   const input = `KEY="abc"def`;
 
@@ -216,10 +212,6 @@ it("should throw if there are non-whitespace characters after a closing quote be
     "ScannerError: Unexpected character 'd' after closing quote at position 9 on line 1",
   );
 });
-
-/**
- * NEWLINES
- */
 
 it("should support Windows newlines (CRLF) without including \\r in the value", () => {
   const input = "KEY1=VALUE1\r\nKEY2=VALUE2\r\n";

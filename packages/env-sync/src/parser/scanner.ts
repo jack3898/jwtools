@@ -16,7 +16,7 @@ export class Scanner {
   #tokens: TokenType[] = [];
 
   constructor(input: string) {
-    this.#input = input;
+    this.#input = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   }
 
   scan(): void {
@@ -57,7 +57,15 @@ export class Scanner {
   consume(): string {
     const char = this.#input[this.#current++];
 
+    if (char === "\n") {
+      this.#line++;
+    }
+
     return char ?? "";
+  }
+
+  nextChar(): string {
+    return this.#input[this.#current] ?? "";
   }
 
   scanComment(): void {
@@ -73,11 +81,7 @@ export class Scanner {
       comment += char;
     }
 
-    if (comment === "") {
-      return;
-    }
-
-    this.#tokens.push(new Comment(comment.slice(1).trim()));
+    this.#tokens.push(new Comment(comment.trim()));
   }
 
   scanKey(): void {
@@ -115,6 +119,11 @@ export class Scanner {
     let openedWith: ValueSurrounding;
     let closedWith: string | undefined;
 
+    // This function means that there has be a quote opened explicitly and as such tests if it's been closed
+    const isClosed = (): boolean => !!openedWith && closedWith === openedWith;
+    // But this one is the same as above, but also returns true if there was never a quote opened to then close
+    const isClosedOrNoWrapper = (): boolean => openedWith === closedWith;
+
     while (!this.isAtEnd()) {
       const char = this.consume();
 
@@ -127,18 +136,36 @@ export class Scanner {
       // Closing quote
       if (char === openedWith) {
         closedWith = char;
+
         continue;
       }
 
       if (char === "\n") {
         this.#tokens.push(new Value(value, openedWith));
+
         return;
       }
 
-      if (char === "#") {
-        this.#tokens.push(new Value(value.trim(), openedWith));
-        this.scanComment();
-        return;
+      if (char === " ") {
+        value += char;
+
+        if (this.nextChar() === "#" && isClosedOrNoWrapper()) {
+          this.consume();
+          this.#tokens.push(new Value(value.trim(), openedWith));
+          this.scanComment();
+
+          return;
+        }
+
+        continue;
+      }
+
+      if (isClosed()) {
+        throw new ScannerError(
+          `Unexpected character '${char}' after closing quote`,
+          this.#current - 1,
+          this.#line,
+        );
       }
 
       value += char;
@@ -157,7 +184,6 @@ export class Scanner {
 
   scanNewline(): void {
     this.#tokens.push(new EmptyLine());
-    this.#line++;
   }
 
   tokens(): TokenType[] {
