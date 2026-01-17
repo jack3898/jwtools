@@ -256,6 +256,32 @@ it("should allow whitespace before an opening quote and still treat the value as
   ]);
 });
 
+it("should allow whitespace around the equals operator", () => {
+  const input = `  KEY   =    VALUE   `;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("VALUE"),
+  ]);
+});
+
+it("should allow whitespace around the equals operator with quoted values", () => {
+  const input = `  KEY   =    'VALUE WITH SPACES'   `;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("VALUE WITH SPACES", "'"),
+  ]);
+});
+
 it("should allow whitespace before an opening single quote and still treat the value as quoted", () => {
   const input = `KEY=\t\t'ANOTHER VALUE'`;
 

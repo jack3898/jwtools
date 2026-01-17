@@ -106,6 +106,10 @@ export class Scanner {
         return;
       }
 
+      if (char === " " || char === "\t") {
+        continue;
+      }
+
       throw new ScannerError(
         `Unexpected character '${char}' in key`,
         this.#current - 1,
@@ -128,7 +132,7 @@ export class Scanner {
       const char = this.consume();
 
       // Opening quote
-      if ((char === '"' || char === "'") && !value) {
+      if ((char === '"' || char === "'") && !value.trim()) {
         openedWith = char;
         continue;
       }
@@ -146,7 +150,7 @@ export class Scanner {
         return;
       }
 
-      if (char === " ") {
+      if (char === " " || char === "\t") {
         value += char;
 
         if (this.nextChar() === "#" && isClosedOrNoWrapper()) {
