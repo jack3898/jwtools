@@ -1,9 +1,10 @@
 import type { TokenType, ValueSurrounding } from "../../types";
+import {
+  carriageReturnRegex,
+  keyCharRegex,
+  whitespaceCharRegex,
+} from "../regex";
 import { Comment, Key, Operator, Value } from "./components";
-
-const keyCharRegex = /[a-zA-Z0-9_.-]/;
-
-const whitespaceCharRegex = /[\s\t]/;
 
 class ScannerError extends Error {
   constructor(message: string, position: number, line: number) {
@@ -18,7 +19,7 @@ export class Scanner {
   #tokens: TokenType[] = [];
 
   constructor(input: string) {
-    this.#input = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    this.#input = input.replace(carriageReturnRegex, "\n");
   }
 
   scan(): void {
