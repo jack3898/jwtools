@@ -1,12 +1,4 @@
-import type { TokenType, ValueSurrounding } from "../types";
-
-export class EmptyLine implements TokenType {
-  readonly value = "\n";
-
-  toString(): string {
-    return this.value;
-  }
-}
+import type { TokenType, ValueSurrounding } from "../../types";
 
 export class Comment implements TokenType {
   readonly value: string;

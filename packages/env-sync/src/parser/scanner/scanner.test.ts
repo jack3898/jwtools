@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { Comment, EmptyLine, Key, Operator, Value } from "./components";
+import { Comment, Key, Operator, Value } from "./components";
 import { Scanner } from "./scanner";
 
 it("should scan a simple .env input", () => {
@@ -28,12 +28,10 @@ KEY2='VALUE2'      # Inline comment
   scanner.scan();
 
   expect(scanner.tokens()).toEqual([
-    new EmptyLine(),
     new Comment("This is a comment"),
     new Key("KEY1"),
     new Operator("="),
     new Value("VALUE1"),
-    new EmptyLine(),
     new Key("KEY2"),
     new Operator("="),
     new Value("VALUE2", "'"),
@@ -226,7 +224,6 @@ it("should support Windows newlines (CRLF) without including \\r in the value", 
     new Key("KEY2"),
     new Operator("="),
     new Value("VALUE2"),
-    new EmptyLine(),
   ]);
 });
 
@@ -332,7 +329,6 @@ it("should not include whitespace after a closing quote in the value", () => {
     new Key("KEY"),
     new Operator("="),
     new Value("abc", '"'),
-    new EmptyLine(),
   ]);
 });
 

@@ -1,5 +1,5 @@
-import type { TokenType, ValueSurrounding } from "../types";
-import { Comment, EmptyLine, Key, Operator, Value } from "./components";
+import type { TokenType, ValueSurrounding } from "../../types";
+import { Comment, Key, Operator, Value } from "./components";
 
 const keyCharRegex = /[a-zA-Z0-9_.-]/;
 
@@ -26,7 +26,6 @@ export class Scanner {
       const char = this.consume();
 
       if (char === "\n") {
-        this.scanNewline();
         continue;
       }
 
@@ -167,10 +166,6 @@ export class Scanner {
       if (char === "\n") {
         this.#tokens.push(new Value(value, openedWith));
 
-        if (this.isAtEnd()) {
-          this.#tokens.push(new EmptyLine());
-        }
-
         return;
       }
 
@@ -209,10 +204,6 @@ export class Scanner {
     }
 
     this.#tokens.push(new Value(value.trim(), openedWith));
-  }
-
-  scanNewline(): void {
-    this.#tokens.push(new EmptyLine());
   }
 
   tokens(): TokenType[] {
