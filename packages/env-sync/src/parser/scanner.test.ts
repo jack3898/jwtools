@@ -226,6 +226,7 @@ it("should support Windows newlines (CRLF) without including \\r in the value", 
     new Key("KEY2"),
     new Operator("="),
     new Value("VALUE2"),
+    new EmptyLine(),
   ]);
 });
 
@@ -320,4 +321,26 @@ it("should support whitespace-only unquoted values (no comment)", () => {
     new Operator("="),
     new Value("", undefined),
   ]);
+});
+
+it("should not include whitespace after a closing quote in the value", () => {
+  const input = `KEY="abc"   \n`;
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("abc", '"'),
+    new EmptyLine(),
+  ]);
+});
+
+it("should throw if whitespace appears inside a key (e.g. K E Y)", () => {
+  const input = `K E Y=VALUE`;
+  const scanner = new Scanner(input);
+
+  expect(() => scanner.scan()).toThrowError(
+    "ScannerError: Unexpected character ' ' in key at position 3 on line 1",
+  );
 });

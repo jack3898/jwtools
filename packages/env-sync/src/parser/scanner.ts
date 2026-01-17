@@ -2,6 +2,7 @@ import type { TokenType, ValueSurrounding } from "../types";
 import { Comment, EmptyLine, Key, Operator, Value } from "./components";
 
 const keyCharRegex = /[a-zA-Z0-9_.-]/;
+const keyRegex = /^[\t\s]*[a-zA-Z0-9_.-]+[\t\s]*$/;
 
 class ScannerError extends Error {
   constructor(message: string, position: number, line: number) {
@@ -100,14 +101,18 @@ export class Scanner {
           throw new Error("Key cannot be empty");
         }
 
-        this.#tokens.push(new Key(key));
+        this.#tokens.push(new Key(key.trim()));
         this.#tokens.push(new Operator("="));
         this.scanValue();
         return;
       }
 
       if (char === " " || char === "\t") {
-        continue;
+        key += char;
+
+        if (keyRegex.test(key)) {
+          continue;
+        }
       }
 
       throw new ScannerError(
@@ -151,7 +156,9 @@ export class Scanner {
       }
 
       if (char === " " || char === "\t") {
-        value += char;
+        if (!isClosed()) {
+          value += char;
+        }
 
         if (this.nextChar() === "#" && isClosedOrNoWrapper()) {
           this.consume();
