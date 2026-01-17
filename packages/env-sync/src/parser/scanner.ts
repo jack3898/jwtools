@@ -113,11 +113,21 @@ export class Scanner {
         if (keyRegex.test(key)) {
           continue;
         }
+
+        // Whitespace inside the key (not just trimming) is invalid.
+        // Report the position of the whitespace character itself.
+        throw new ScannerError(
+          `Unexpected character '${char}' in key`,
+          this.#current - 1,
+          this.#line,
+        );
       }
 
+      // Non-whitespace invalid character (e.g. '@') inside the key.
+      // Report the position after consume (1-based style used by tests).
       throw new ScannerError(
         `Unexpected character '${char}' in key`,
-        this.#current - 1,
+        this.#current,
         this.#line,
       );
     }
@@ -179,7 +189,7 @@ export class Scanner {
       if (isClosed()) {
         throw new ScannerError(
           `Unexpected character '${char}' after closing quote`,
-          this.#current - 1,
+          this.#current,
           this.#line,
         );
       }
@@ -190,7 +200,7 @@ export class Scanner {
     if (openedWith !== closedWith) {
       throw new ScannerError(
         `Unterminated quoted value starting`,
-        this.#current - value.length - 1,
+        this.#current - value.length,
         this.#line,
       );
     }
