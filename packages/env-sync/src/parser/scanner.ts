@@ -2,7 +2,8 @@ import type { TokenType, ValueSurrounding } from "../types";
 import { Comment, EmptyLine, Key, Operator, Value } from "./components";
 
 const keyCharRegex = /[a-zA-Z0-9_.-]/;
-const keyRegex = /^[\t\s]*[a-zA-Z0-9_.-]+[\t\s]*$/;
+
+const whitespaceCharRegex = /[\s\t]/;
 
 class ScannerError extends Error {
   constructor(message: string, position: number, line: number) {
@@ -24,30 +25,32 @@ export class Scanner {
     while (!this.isAtEnd()) {
       const char = this.consume();
 
-      switch (char) {
-        case "\n":
-          this.scanNewline();
-          break;
-        case "#":
-          this.scanComment();
-          break;
-        case " ":
-        case "\t":
-          // Ignore whitespace
-          break;
-        default:
-          if (keyCharRegex.test(char)) {
-            this.#current--;
-            this.scanKey();
-            break;
-          } else {
-            throw new ScannerError(
-              `Unexpected character '${char}'`,
-              this.#current - 1,
-              this.#line,
-            );
-          }
+      if (char === "\n") {
+        this.scanNewline();
+        continue;
       }
+
+      if (char === "#") {
+        this.scanComment();
+        continue;
+      }
+
+      if (whitespaceCharRegex.test(char)) {
+        // Ignore whitespace
+        continue;
+      }
+
+      if (keyCharRegex.test(char)) {
+        this.#current--;
+        this.scanKey();
+        continue;
+      }
+
+      throw new ScannerError(
+        `Unexpected character '${char}'`,
+        this.#current - 1,
+        this.#line,
+      );
     }
   }
 
@@ -70,61 +73,68 @@ export class Scanner {
   }
 
   scanComment(): void {
-    let comment = "";
+    const newlineIndex = this.#input.indexOf("\n", this.#current);
 
-    while (!this.isAtEnd()) {
-      const char = this.consume();
-
-      if (char === "\n") {
-        break;
-      }
-
-      comment += char;
+    if (newlineIndex === -1) {
+      const comment = this.#input.slice(this.#current);
+      this.#current = this.#input.length;
+      this.#tokens.push(new Comment(comment.trim()));
+      return;
     }
 
+    const comment = this.#input.slice(this.#current, newlineIndex);
+    this.#current = newlineIndex + 1;
+    this.#line++;
     this.#tokens.push(new Comment(comment.trim()));
   }
 
   scanKey(): void {
-    let key = "";
+    const start = this.#current;
+    let end = start;
+    let seenWhitespaceAfterKey = false;
+    let seenKeyCharAfterWhitespace = false;
 
     while (!this.isAtEnd()) {
       const char = this.consume();
 
       if (keyCharRegex.test(char)) {
-        key += char;
+        end = this.#current;
+
+        if (seenWhitespaceAfterKey) {
+          seenKeyCharAfterWhitespace = true;
+        }
+
+        continue;
+      }
+
+      if (whitespaceCharRegex.test(char)) {
+        if (!seenWhitespaceAfterKey) {
+          seenWhitespaceAfterKey = true;
+        } else {
+          if (seenKeyCharAfterWhitespace) {
+            throw new ScannerError(
+              `Unexpected character '${char}' in key`,
+              this.#current - 1,
+              this.#line,
+            );
+          }
+        }
+
         continue;
       }
 
       if (char === "=") {
-        if (!key) {
+        if (end === start) {
           throw new Error("Key cannot be empty");
         }
 
-        this.#tokens.push(new Key(key.trim()));
+        const key = this.#input.slice(start, end);
+        this.#tokens.push(new Key(key));
         this.#tokens.push(new Operator("="));
         this.scanValue();
         return;
       }
 
-      if (char === " " || char === "\t") {
-        key += char;
-
-        if (keyRegex.test(key)) {
-          continue;
-        }
-
-        // Whitespace inside the key (not just trimming) is invalid.
-        // Report the position of the whitespace character itself.
-        throw new ScannerError(
-          `Unexpected character '${char}' in key`,
-          this.#current - 1,
-          this.#line,
-        );
-      }
-
-      // Non-whitespace invalid character (e.g. '@') inside the key.
-      // Report the position after consume (1-based style used by tests).
       throw new ScannerError(
         `Unexpected character '${char}' in key`,
         this.#current,
@@ -138,31 +148,25 @@ export class Scanner {
     let openedWith: ValueSurrounding;
     let closedWith: string | undefined;
 
-    // This function means that there has be a quote opened explicitly and as such tests if it's been closed
     const isClosed = (): boolean => !!openedWith && closedWith === openedWith;
-    // But this one is the same as above, but also returns true if there was never a quote opened to then close
     const isClosedOrNoWrapper = (): boolean => openedWith === closedWith;
 
     while (!this.isAtEnd()) {
       const char = this.consume();
 
-      // Opening quote
       if ((char === '"' || char === "'") && !value.trim()) {
         openedWith = char;
         continue;
       }
 
-      // Closing quote
       if (char === openedWith) {
         closedWith = char;
-
         continue;
       }
 
       if (char === "\n") {
         this.#tokens.push(new Value(value, openedWith));
 
-        // If this newline is the final character in the input, emit an EmptyLine token
         if (this.isAtEnd()) {
           this.#tokens.push(new EmptyLine());
         }
@@ -170,7 +174,7 @@ export class Scanner {
         return;
       }
 
-      if (char === " " || char === "\t") {
+      if (whitespaceCharRegex.test(char)) {
         if (!isClosed()) {
           value += char;
         }
@@ -179,7 +183,6 @@ export class Scanner {
           this.consume();
           this.#tokens.push(new Value(value.trim(), openedWith));
           this.scanComment();
-
           return;
         }
 
