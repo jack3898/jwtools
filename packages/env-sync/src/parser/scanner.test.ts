@@ -228,3 +228,70 @@ it("should support Windows newlines (CRLF) without including \\r in the value", 
     new Value("VALUE2"),
   ]);
 });
+
+it("should treat a tab before # as starting an inline comment (same as space)", () => {
+  const input = `KEY=VALUE\t# Inline comment`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("VALUE"),
+    new Comment("Inline comment"),
+  ]);
+});
+
+it("should allow whitespace before an opening quote and still treat the value as quoted", () => {
+  const input = `KEY=   "VALUE WITH SPACES"`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("VALUE WITH SPACES", '"'),
+  ]);
+});
+
+it("should allow whitespace before an opening single quote and still treat the value as quoted", () => {
+  const input = `KEY=\t\t'ANOTHER VALUE'`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("ANOTHER VALUE", "'"),
+  ]);
+});
+
+it("should treat multiple spaces or tabs before # as starting an inline comment", () => {
+  const input = `KEY=VALUE  \t \t# Comment`;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("VALUE"),
+    new Comment("Comment"),
+  ]);
+});
+
+it("should support whitespace-only unquoted values (no comment)", () => {
+  const input = `KEY=    `;
+
+  const scanner = new Scanner(input);
+  scanner.scan();
+
+  expect(scanner.tokens()).toEqual([
+    new Key("KEY"),
+    new Operator("="),
+    new Value("", undefined),
+  ]);
+});
