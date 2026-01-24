@@ -4,7 +4,7 @@ import {
   keyCharRegex,
   whitespaceCharRegex,
 } from "../regex";
-import { Comment, Key, Operator, Value } from "./components";
+import { Comment, Key, LineBreak, Operator, Value } from "./components";
 
 class ScannerError extends Error {
   constructor(message: string, position: number, line: number) {
@@ -17,17 +17,24 @@ export class Scanner {
   #current = 0;
   #line = 1;
   #tokens: TokenType[] = [];
+  #scanned = false;
 
   constructor(input: string) {
     this.#input = input.replace(carriageReturnRegex, "\n");
-    this.scan();
   }
 
   scan(): void {
+    if (this.#scanned) {
+      return;
+    }
+
+    this.#scanned = true;
+
     while (!this.isAtEnd()) {
       const char = this.consume();
 
       if (char === "\n") {
+        this.#tokens.push(new LineBreak());
         continue;
       }
 
@@ -84,8 +91,9 @@ export class Scanner {
     }
 
     const comment = this.#input.slice(this.#current, newlineIndex);
-    this.#current = newlineIndex + 1;
-    this.#line++;
+    // Leave the newline for the main scan loop so it can emit a LineBreak token
+    // and update line tracking in one place.
+    this.#current = newlineIndex;
     this.#tokens.push(new Comment(comment.trim()));
   }
 
@@ -167,6 +175,7 @@ export class Scanner {
 
       if (char === "\n") {
         this.#tokens.push(new Value(value, openedWith));
+        this.#tokens.push(new LineBreak());
 
         return;
       }
@@ -209,6 +218,7 @@ export class Scanner {
   }
 
   get tokens(): ReadonlyArray<TokenType> {
+    this.scan();
     return this.#tokens;
   }
 }

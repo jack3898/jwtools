@@ -58,4 +58,12 @@ export class Operator implements TokenType {
   }
 }
 
+export class LineBreak implements TokenType {
+  readonly value = "\n";
+
+  toString(): string {
+    return this.value;
+  }
+}
+
 export type ScannerTokenType = Key | Value | Operator | Comment;

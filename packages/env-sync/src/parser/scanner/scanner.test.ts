@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { Comment, Key, Operator, Value } from "./components";
+import { Comment, Key, LineBreak, Operator, Value } from "./components";
 import { Scanner } from "./scanner";
 
 it("should scan a simple .env input", () => {
@@ -24,15 +24,21 @@ KEY2='VALUE2'      # Inline comment
   const scanner = new Scanner(input);
 
   expect(scanner.tokens).toEqual([
+    new LineBreak(),
     new Comment("This is a comment"),
+    new LineBreak(),
     new Key("KEY1"),
     new Operator("="),
     new Value("VALUE1"),
+    new LineBreak(),
+    new LineBreak(),
     new Key("KEY2"),
     new Operator("="),
     new Value("VALUE2", "'"),
     new Comment("Inline comment"),
+    new LineBreak(),
     new Comment("Dedicated comment"),
+    new LineBreak(),
   ]);
 });
 
@@ -46,6 +52,7 @@ KEY2='ANOTHER VALUE'`;
     new Key("KEY1"),
     new Operator("="),
     new Value("VALUE WITH SPACES", '"'),
+    new LineBreak(),
     new Key("KEY2"),
     new Operator("="),
     new Value("ANOTHER VALUE", "'"),
@@ -128,6 +135,7 @@ KEY=VALUE`;
 
   expect(scanner.tokens).toEqual([
     new Comment(""),
+    new LineBreak(),
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE"),
@@ -203,9 +211,11 @@ it("should support Windows newlines (CRLF) without including \\r in the value", 
     new Key("KEY1"),
     new Operator("="),
     new Value("VALUE1"),
+    new LineBreak(),
     new Key("KEY2"),
     new Operator("="),
     new Value("VALUE2"),
+    new LineBreak(),
   ]);
 });
 
@@ -303,6 +313,7 @@ it("should not include whitespace after a closing quote in the value", () => {
     new Key("KEY"),
     new Operator("="),
     new Value("abc", '"'),
+    new LineBreak(),
   ]);
 });
 
