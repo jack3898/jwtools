@@ -62,7 +62,7 @@ KEY2='ANOTHER VALUE'`;
 it("should throw an error for empty keys", () => {
   const scanner = new Scanner("=VALUE");
 
-  expect(() => scanner.scan()).toThrowError(
+  expect(() => scanner.#scan()).toThrowError(
     "ScannerError: Unexpected character '=' at position 0 on line 1",
   );
 });
@@ -70,7 +70,7 @@ it("should throw an error for empty keys", () => {
 it("should throw an error for invalid characters", () => {
   const scanner = new Scanner("KEY@VALUE");
 
-  expect(() => scanner.scan()).toThrowError(
+  expect(() => scanner.#scan()).toThrowError(
     "ScannerError: Unexpected character '@' in key at position 4 on line 1",
   );
 });
@@ -78,7 +78,7 @@ it("should throw an error for invalid characters", () => {
 it("should throw an error for unterminated quoted values", () => {
   const scanner = new Scanner(`KEY='UNTERMINATED VALUE`);
 
-  expect(() => scanner.scan()).toThrowError(
+  expect(() => scanner.#scan()).toThrowError(
     "ScannerError: Unterminated quoted value starting at position 5 on line 1",
   );
 });
@@ -122,7 +122,7 @@ KEY@VALUE`;
 
   const scanner = new Scanner(input);
 
-  expect(() => scanner.scan()).toThrowError(
+  expect(() => scanner.#scan()).toThrowError(
     "ScannerError: Unexpected character '@' in key at position 14 on line 2",
   );
 });
@@ -197,7 +197,7 @@ it("should throw if there are non-whitespace characters after a closing quote be
 
   const scanner = new Scanner(input);
 
-  expect(() => scanner.scan()).toThrowError(
+  expect(() => scanner.#scan()).toThrowError(
     "ScannerError: Unexpected character 'd' after closing quote at position 10 on line 1",
   );
 });
@@ -321,7 +321,7 @@ it("should throw if whitespace appears inside a key (e.g. K E Y)", () => {
   const input = `K E Y=VALUE`;
   const scanner = new Scanner(input);
 
-  expect(() => scanner.scan()).toThrowError(
+  expect(() => scanner.#scan()).toThrowError(
     "ScannerError: Unexpected character ' ' in key at position 3 on line 1",
   );
 });

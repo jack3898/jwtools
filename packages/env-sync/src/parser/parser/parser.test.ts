@@ -52,6 +52,18 @@ it("should parse a simple commented line", () => {
   expect(parser.tokens()).toEqual([new Comment("This is a comment")]);
 });
 
+it("should parse with a new line comment after a key value pair, and it not be mistaken for an inline comment", () => {
+  const input = `KEY=VALUE
+# This is a comment`;
+
+  const parser = new Parser(new Scanner(input).tokens);
+
+  expect(parser.tokens()).toEqual([
+    new Line(new Key("KEY"), new Operator("="), new Value("VALUE")),
+    new Comment("This is a comment"),
+  ]);
+});
+
 it("should parse a .env input with quoted values", () => {
   const input = `KEY1="VALUE WITH SPACES"
 KEY2='ANOTHER VALUE'`;
