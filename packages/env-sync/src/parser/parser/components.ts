@@ -1,15 +1,22 @@
 import type { TokenType } from "../../types";
+import type { Comment } from "../scanner/components";
 
-export class KeyValuePair implements TokenType {
+export class Line implements TokenType {
   readonly #left: TokenType;
   readonly #operator: TokenType;
   readonly #right: TokenType;
   #comment: TokenType | undefined;
 
-  constructor(key: TokenType, operator: TokenType, value: TokenType) {
+  constructor(
+    key: TokenType,
+    operator: TokenType,
+    value: TokenType,
+    comment?: TokenType,
+  ) {
     this.#left = key;
     this.#operator = operator;
     this.#right = value;
+    this.#comment = comment;
   }
 
   toString(): string {
@@ -22,11 +29,6 @@ export class KeyValuePair implements TokenType {
     return result;
   }
 
-  addComment(comment: TokenType): this {
-    this.#comment = comment;
-    return this;
-  }
-
   get key(): string {
     return this.#left.value;
   }
@@ -35,3 +37,5 @@ export class KeyValuePair implements TokenType {
     return this.#right.value;
   }
 }
+
+export type ParserTokenType = Line | Comment;

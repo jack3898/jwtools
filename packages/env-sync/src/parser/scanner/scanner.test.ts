@@ -5,9 +5,7 @@ import { Scanner } from "./scanner";
 it("should scan a simple .env input", () => {
   const scanner = new Scanner("KEY=VALUE");
 
-  scanner.scan();
-
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE"),
@@ -25,9 +23,7 @@ KEY2='VALUE2'      # Inline comment
 
   const scanner = new Scanner(input);
 
-  scanner.scan();
-
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Comment("This is a comment"),
     new Key("KEY1"),
     new Operator("="),
@@ -46,9 +42,7 @@ KEY2='ANOTHER VALUE'`;
 
   const scanner = new Scanner(input);
 
-  scanner.scan();
-
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY1"),
     new Operator("="),
     new Value("VALUE WITH SPACES", '"'),
@@ -87,9 +81,7 @@ it("should allow for a comment with quoted characters (basically, it doesn't con
 
   const scanner = new Scanner(input);
 
-  scanner.scan();
-
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE"),
@@ -102,9 +94,7 @@ it("should allow for spaces in a value without quotes with a comment", () => {
 
   const scanner = new Scanner(input);
 
-  scanner.scan();
-
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE WITH SPACES"),
@@ -116,9 +106,7 @@ it("should not drop the first character of a comment (regression)", () => {
   const input = `# Hello`;
   const scanner = new Scanner(input);
 
-  scanner.scan();
-
-  expect(scanner.tokens()).toEqual([new Comment("Hello")]);
+  expect(scanner.tokens).toEqual([new Comment("Hello")]);
 });
 
 it("should increment line count after a full-line comment so later errors report the correct line", () => {
@@ -137,9 +125,8 @@ it("should preserve an empty comment line (a single #) as an empty Comment token
 KEY=VALUE`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Comment(""),
     new Key("KEY"),
     new Operator("="),
@@ -151,9 +138,8 @@ it("should not treat # as a comment when it is part of an unquoted value (no whi
   const input = `URL=https://example.com/path#section`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("URL"),
     new Operator("="),
     new Value("https://example.com/path#section"),
@@ -164,9 +150,8 @@ it("should not treat # as a comment when attached directly to the value (no whit
   const input = `KEY=abc#def`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("abc#def"),
@@ -177,9 +162,8 @@ it("should treat # as an inline comment when preceded by whitespace", () => {
   const input = `KEY=abc #def`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("abc"),
@@ -191,9 +175,8 @@ it("should never treat # as an inline comment inside quoted values", () => {
   const input = `KEY="abc #def" # real comment`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("abc #def", '"'),
@@ -215,9 +198,8 @@ it("should support Windows newlines (CRLF) without including \\r in the value", 
   const input = "KEY1=VALUE1\r\nKEY2=VALUE2\r\n";
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY1"),
     new Operator("="),
     new Value("VALUE1"),
@@ -231,9 +213,8 @@ it("should treat a tab before # as starting an inline comment (same as space)", 
   const input = `KEY=VALUE\t# Inline comment`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE"),
@@ -245,9 +226,8 @@ it("should allow whitespace before an opening quote and still treat the value as
   const input = `KEY=   "VALUE WITH SPACES"`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE WITH SPACES", '"'),
@@ -258,9 +238,8 @@ it("should allow whitespace around the equals operator", () => {
   const input = `  KEY   =    VALUE   `;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE"),
@@ -271,9 +250,8 @@ it("should allow whitespace around the equals operator with quoted values", () =
   const input = `  KEY   =    'VALUE WITH SPACES'   `;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE WITH SPACES", "'"),
@@ -284,9 +262,8 @@ it("should allow whitespace before an opening single quote and still treat the v
   const input = `KEY=\t\t'ANOTHER VALUE'`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("ANOTHER VALUE", "'"),
@@ -297,9 +274,8 @@ it("should treat multiple spaces or tabs before # as starting an inline comment"
   const input = `KEY=VALUE  \t \t# Comment`;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("VALUE"),
@@ -311,9 +287,8 @@ it("should support whitespace-only unquoted values (no comment)", () => {
   const input = `KEY=    `;
 
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("", undefined),
@@ -323,9 +298,8 @@ it("should support whitespace-only unquoted values (no comment)", () => {
 it("should not include whitespace after a closing quote in the value", () => {
   const input = `KEY="abc"   \n`;
   const scanner = new Scanner(input);
-  scanner.scan();
 
-  expect(scanner.tokens()).toEqual([
+  expect(scanner.tokens).toEqual([
     new Key("KEY"),
     new Operator("="),
     new Value("abc", '"'),

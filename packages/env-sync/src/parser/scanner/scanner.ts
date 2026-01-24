@@ -20,6 +20,7 @@ export class Scanner {
 
   constructor(input: string) {
     this.#input = input.replace(carriageReturnRegex, "\n");
+    this.scan();
   }
 
   scan(): void {
@@ -207,7 +208,7 @@ export class Scanner {
     this.#tokens.push(new Value(value.trim(), openedWith));
   }
 
-  tokens(): TokenType[] {
+  get tokens(): ReadonlyArray<TokenType> {
     return this.#tokens;
   }
 }

@@ -57,3 +57,5 @@ export class Operator implements TokenType {
     return this.value;
   }
 }
+
+export type ScannerTokenType = Key | Value | Operator | Comment;
