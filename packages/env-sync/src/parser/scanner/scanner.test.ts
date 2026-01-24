@@ -60,32 +60,25 @@ KEY2='ANOTHER VALUE'`;
 });
 
 it("should throw an error for empty keys", () => {
-  const scanner = new Scanner("=VALUE");
-
-  expect(() => scanner.#scan()).toThrowError(
+  expect(() => new Scanner("=VALUE")).toThrowError(
     "ScannerError: Unexpected character '=' at position 0 on line 1",
   );
 });
 
 it("should throw an error for invalid characters", () => {
-  const scanner = new Scanner("KEY@VALUE");
-
-  expect(() => scanner.#scan()).toThrowError(
+  expect(() => new Scanner("KEY@VALUE")).toThrowError(
     "ScannerError: Unexpected character '@' in key at position 4 on line 1",
   );
 });
 
 it("should throw an error for unterminated quoted values", () => {
-  const scanner = new Scanner(`KEY='UNTERMINATED VALUE`);
-
-  expect(() => scanner.#scan()).toThrowError(
+  expect(() => new Scanner(`KEY='UNTERMINATED VALUE`)).toThrowError(
     "ScannerError: Unterminated quoted value starting at position 5 on line 1",
   );
 });
 
 it("should allow for a comment with quoted characters (basically, it doesn't confuse a comment with a value)", () => {
   const input = `KEY=VALUE # This is a 'comment' with "quotes"`;
-
   const scanner = new Scanner(input);
 
   expect(scanner.tokens).toEqual([
@@ -120,9 +113,7 @@ it("should increment line count after a full-line comment so later errors report
   const input = `# comment
 KEY@VALUE`;
 
-  const scanner = new Scanner(input);
-
-  expect(() => scanner.#scan()).toThrowError(
+  expect(() => new Scanner(input)).toThrowError(
     "ScannerError: Unexpected character '@' in key at position 14 on line 2",
   );
 });
@@ -195,9 +186,7 @@ it("should never treat # as an inline comment inside quoted values", () => {
 it("should throw if there are non-whitespace characters after a closing quote before newline/comment", () => {
   const input = `KEY="abc"def`;
 
-  const scanner = new Scanner(input);
-
-  expect(() => scanner.#scan()).toThrowError(
+  expect(() => new Scanner(input)).toThrowError(
     "ScannerError: Unexpected character 'd' after closing quote at position 10 on line 1",
   );
 });
@@ -319,9 +308,8 @@ it("should not include whitespace after a closing quote in the value", () => {
 
 it("should throw if whitespace appears inside a key (e.g. K E Y)", () => {
   const input = `K E Y=VALUE`;
-  const scanner = new Scanner(input);
 
-  expect(() => scanner.#scan()).toThrowError(
+  expect(() => new Scanner(input)).toThrowError(
     "ScannerError: Unexpected character ' ' in key at position 3 on line 1",
   );
 });

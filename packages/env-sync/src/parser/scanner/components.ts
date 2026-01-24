@@ -30,6 +30,10 @@ export class Key implements TokenType {
 
     return undefined;
   }
+
+  toString(): string {
+    return this.value;
+  }
 }
 
 export class Value implements TokenType {

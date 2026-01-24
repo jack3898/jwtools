@@ -21,17 +21,18 @@ export class Scanner {
 
   constructor(input: string) {
     this.#input = input.replace(carriageReturnRegex, "\n");
+    this.#scan();
   }
 
-  scan(): void {
+  #scan(): void {
     if (this.#scanned) {
       return;
     }
 
     this.#scanned = true;
 
-    while (!this.isAtEnd()) {
-      const char = this.consume();
+    while (!this.#isAtEnd()) {
+      const char = this.#consume();
 
       if (char === "\n") {
         this.#tokens.push(new LineBreak());
@@ -39,7 +40,7 @@ export class Scanner {
       }
 
       if (char === "#") {
-        this.scanComment();
+        this.#scanComment();
         continue;
       }
 
@@ -50,7 +51,7 @@ export class Scanner {
 
       if (keyCharRegex.test(char)) {
         this.#current--;
-        this.scanKey();
+        this.#scanKey();
         continue;
       }
 
@@ -62,11 +63,11 @@ export class Scanner {
     }
   }
 
-  isAtEnd(): boolean {
+  #isAtEnd(): boolean {
     return this.#current >= this.#input.length;
   }
 
-  consume(): string {
+  #consume(): string {
     const char = this.#input[this.#current++];
 
     if (char === "\n") {
@@ -76,11 +77,11 @@ export class Scanner {
     return char ?? "";
   }
 
-  nextChar(): string {
+  #nextChar(): string {
     return this.#input[this.#current] ?? "";
   }
 
-  scanComment(): void {
+  #scanComment(): void {
     const newlineIndex = this.#input.indexOf("\n", this.#current);
 
     if (newlineIndex === -1) {
@@ -97,14 +98,14 @@ export class Scanner {
     this.#tokens.push(new Comment(comment.trim()));
   }
 
-  scanKey(): void {
+  #scanKey(): void {
     const start = this.#current;
     let end = start;
     let seenWhitespaceAfterKey = false;
     let seenKeyCharAfterWhitespace = false;
 
-    while (!this.isAtEnd()) {
-      const char = this.consume();
+    while (!this.#isAtEnd()) {
+      const char = this.#consume();
 
       if (keyCharRegex.test(char)) {
         end = this.#current;
@@ -140,7 +141,7 @@ export class Scanner {
         const key = this.#input.slice(start, end);
         this.#tokens.push(new Key(key));
         this.#tokens.push(new Operator("="));
-        this.scanValue();
+        this.#scanValue();
         return;
       }
 
@@ -152,7 +153,7 @@ export class Scanner {
     }
   }
 
-  scanValue(): void {
+  #scanValue(): void {
     let value = "";
     let openedWith: ValueSurrounding;
     let closedWith: string | undefined;
@@ -160,8 +161,8 @@ export class Scanner {
     const isClosed = (): boolean => !!openedWith && closedWith === openedWith;
     const isClosedOrNoWrapper = (): boolean => openedWith === closedWith;
 
-    while (!this.isAtEnd()) {
-      const char = this.consume();
+    while (!this.#isAtEnd()) {
+      const char = this.#consume();
 
       if ((char === '"' || char === "'") && !value.trim()) {
         openedWith = char;
@@ -185,10 +186,10 @@ export class Scanner {
           value += char;
         }
 
-        if (this.nextChar() === "#" && isClosedOrNoWrapper()) {
-          this.consume();
+        if (this.#nextChar() === "#" && isClosedOrNoWrapper()) {
+          this.#consume();
           this.#tokens.push(new Value(value.trim(), openedWith));
-          this.scanComment();
+          this.#scanComment();
           return;
         }
 
@@ -218,7 +219,7 @@ export class Scanner {
   }
 
   get tokens(): ReadonlyArray<TokenType> {
-    this.scan();
+    this.#scan();
     return this.#tokens;
   }
 }

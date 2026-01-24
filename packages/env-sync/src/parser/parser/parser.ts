@@ -82,7 +82,7 @@ export class Parser {
     }
   }
 
-  tokens(): TokenType[] {
+  tokens(): ParserTokenType[] {
     return this.#lines;
   }
 }
