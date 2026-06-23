@@ -9,15 +9,66 @@ type TranslationConfig<Languages> = {
  */
 type TranslationValue = string | ((dict: never, locale?: string) => string);
 
+/**
+ * The dictionary passed to a `define(...)` call: a record of keys, each mapping
+ * every supported language to a {@link TranslationValue}.
+ */
+type TranslationDict<Language extends string = string> = Record<
+  string,
+  Record<Language, TranslationValue>
+>;
+
+/**
+ * The translator returned by a `define(...)` call. Give it the active locale
+ * and it resolves every key to that locale's value.
+ *
+ * Use this to type a value that should accept "the result of `define(...)`" —
+ * for example a `useTranslation` hook — while preserving full inference of the
+ * translation keys. Constrain a generic with it rather than annotating directly
+ * so the concrete keys survive:
+ *
+ * @example ```tsx
+ * import type { Translator } from "@jack3898/micro-translate";
+ *
+ * // `T` keeps the exact keys, so `t.welcome`/`t.submit` stay fully typed.
+ * export function useTranslation<const T extends Translator>(translator: T) {
+ *   const locale = useUserLocale(); // your locale source, e.g. "en" | "jp"
+ *   return translator(locale);
+ * }
+ * ```
+ */
+export type Translator<
+  T extends TranslationDict = TranslationDict,
+  Language extends string = string,
+> = <Locale extends Language>(
+  locale: Locale,
+) => { [K in keyof T]: T[K][Locale] };
+
+/**
+ * The resolved translations a {@link Translator} produces — every key mapped to
+ * its value across the supported locales. Use it to annotate the return of a
+ * wrapper such as a `useTranslation` hook so callers keep the exact key types:
+ *
+ * @example ```tsx
+ * import type { Translation, Translator } from "@jack3898/micro-translate";
+ *
+ * export function useTranslation<const T extends Translator>(
+ *   translator: T,
+ * ): Translation<T> {
+ *   const locale = useUserLocale(); // "en" | "jp"
+ *   return translator(locale) as Translation<T>;
+ * }
+ * ```
+ */
+export type Translation<T extends Translator> = ReturnType<T>;
+
 export function createTranslationConfig<Language extends string>(
   _config: TranslationConfig<Language>,
 ) {
-  return <const T extends Record<string, Record<Language, TranslationValue>>>(
+  return <const T extends TranslationDict<Language>>(
     translations: T,
-  ) => {
-    return <Locale extends Language>(
-      locale: Locale,
-    ): { [K in keyof T]: T[K][Locale] } =>
+  ): Translator<T, Language> =>
+    <Locale extends Language>(locale: Locale) =>
       new Proxy({} as { [K in keyof T]: T[K][Locale] }, {
         get: (_target, key) => {
           const value = translations[key as keyof T]?.[locale];
@@ -31,7 +82,6 @@ export function createTranslationConfig<Language extends string>(
           return (dict: never) => value(dict, locale);
         },
       });
-  };
 }
 
 export const $ = Symbol("template-placeholder");

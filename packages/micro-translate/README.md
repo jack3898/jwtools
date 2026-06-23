@@ -35,8 +35,8 @@ const translator = translations({
 
 export function MyComponent() {
   // In your app you might want to make this a custom hook or embed ths translator into your logged in user code!
-  const locale = useUserLocale(); // "en" | "jp"
-  const t = translator(locale);
+  // See further down in this readme for a more concrete React example.
+  const t = translator("en");
 
   return (
     <form>
@@ -82,6 +82,40 @@ You can mix plain text, named parameters and plurals in one template:
 ```ts
 msg`${"name"} has ${plural("count", { one: "1 file", other: "many files" })}`;
 // call with { name: "Ada", count: 1 } -> "Ada has 1 file"
+```
+
+### Wrapping the translator (e.g. a `useTranslation` hook in React)
+
+Often you'll want to fetch the active locale once be it from context, a logged-in user, etc. and hand back a ready-to-use translator. The `Translator` and `Translation` type helpers let you write that wrapper without losing any of the
+inferred keys.
+
+`Translator` is "the result of `define(...)`", and `Translation<T>` is what that translator resolves to. Constrain a generic with `Translator` so the concrete keys flow through, and annotate the return with `Translation<T>`:
+
+```tsx
+import { type Translation, type Translator } from "@jack3898/micro-translate";
+
+export function useTranslation<const T extends Translator>(
+  translator: T,
+): Translation<T> {
+  const locale = useUserLocale(); // your locale source, e.g. "en" | "jp"
+
+  return translator(locale) as Translation<T>;
+}
+```
+
+Then a component passes its colocated translator straight in and keeps full autocomplete and type-safety on every key:
+
+```tsx
+const translator = define({
+  submit: { en: "Submit", jp: "Submitto" },
+  welcome: { en: msg`Hey ${"name"}`, jp: msg`Konnichiwa ${"name"}` },
+});
+
+function MyComponent() {
+  const t = useTranslation(translator);
+
+  return <p>{t.welcome({ name: "World" })}</p>; // fully typed
+}
 ```
 
 ## Embrace colocation!
