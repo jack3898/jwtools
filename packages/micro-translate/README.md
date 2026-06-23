@@ -6,7 +6,7 @@ Ultra type-safe translations that doesn't fight your toolchain. Works in any app
 
 ### Define your translations
 
-Declare the languages you support, then provide a translation for every key in every language. A translation is either a plain string or a `msg` template:
+Declare the languages you support, then provide a translation for every key in every language.
 
 ```ts
 import { createTranslationConfig, msg } from "@jack3898/micro-translate";
@@ -47,25 +47,13 @@ export function MyComponent() {
 }
 ```
 
-Every key must cover every declared language — miss one and TypeScript will tell you.
+A translation is either a plain string or a `msg` template:
 
-### Read a translation raw
-
-Pick a locale, then read the key. Plain strings come back as-is; templates are functions you call with their parameters:
-
-```ts
-translator("en").submit; // "Submit"
-translator("jp").submit; // "Submitto"
-
-translator("en").welcome({ name: "World" }); // "Hey World"
-translator("jp").welcome({ name: "World" }); // "Konnichiwa World"
-```
-
-The parameters a template needs are inferred from how you wrote it, so `welcome` requires `{ name: string }` and nothing else.
+Every key must cover every declared language — miss one and TypeScript will tell you. Support for partial localization may come in the future!
 
 ### Pluralization
 
-`plural` selects the right wording for a count using what's already avaiable in your runtime: `Intl.PluralRules`. The parameter must be a **number** (a string is a type error), and `other` is the required fallback:
+`plural` selects the right wording for a count using what's already available in your runtime: `Intl.PluralRules`. The parameter must be a **number** (a string is a type error), and `other` is the required fallback:
 
 ```ts
 import {
@@ -98,9 +86,7 @@ msg`${"name"} has ${plural("count", { one: "1 file", other: "many files" })}`;
 
 ## Embrace colocation!
 
-One major philosophical change this package introduces is defining translations per component or module. Where you need language, you have a define right there for reference.
-
-This package was written with that in mind at its core.
+One major philosophical change this package introduces is defining translations per component or module. Where you need language, you have the translations right there for reference. This is a major departure from the norm and I think this is fine for most applications.
 
 Global translations can be hard to maintain for a variety of reasons. They can give a false sense of reuse, create stale translations, end up massive, and it becomes a complete chore to update.
 
