@@ -1,6 +1,6 @@
 [tools]
 node = "22"
-pnpm = "10.17.0"
+"npm:pnpm" = "11.9.0"
 
 [tasks.install]
 description = "Install workspace dependencies"

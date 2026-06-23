@@ -23,5 +23,5 @@
     "vitest": "catalog:"
   },
   "keywords": [],
-  "packageManager": "pnpm@10.17.0"
+  "packageManager": "pnpm@11.9.0"
 }
