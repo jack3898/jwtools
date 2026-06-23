@@ -23,6 +23,13 @@
           "command": "tsx watch src/match-collection/index.ts"
         }
       },
+      "dev:micro-translate": {
+        "executor": "nx:run-commands",
+        "options": {
+          "cwd": "{projectRoot}",
+          "command": "tsx watch src/micro-translate/index.ts"
+        }
+      },
       "dev:templater": {
         "executor": "nx:run-commands",
         "options": {
@@ -38,6 +45,7 @@
   "dependencies": {
     "@jack3898/lazy-object": "workspace:^",
     "@jack3898/match-collection": "workspace:^",
+    "@jack3898/micro-translate": "workspace:^",
     "@jack3898/templater": "workspace:^"
   },
   "devDependencies": {
