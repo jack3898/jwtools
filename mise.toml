@@ -1,0 +1,23 @@
+[tools]
+node = "22"
+pnpm = "10.17.0"
+
+[tasks.install]
+description = "Install workspace dependencies"
+run = "pnpm install"
+
+[tasks.build]
+description = "Build all packages"
+run = "pnpm build"
+
+[tasks.dev]
+description = "Run all packages in dev mode"
+run = "pnpm dev"
+
+[tasks.test]
+description = "Run tests"
+run = "pnpm test"
+
+[tasks.check]
+description = "Lint, type-check and format check"
+run = "pnpm check"
