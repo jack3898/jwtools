@@ -80,20 +80,28 @@ export function createTranslationConfig<Language extends string>(
         return (dict: never) => value(dict, locale);
       };
 
-      return new Proxy({} as { [K in keyof T]: T[K][Locale] }, {
-        get: (_target, key) => (key in translations ? resolve(key) : undefined),
-        has: (_target, key) => key in translations,
-        ownKeys: () => Reflect.ownKeys(translations),
-        getOwnPropertyDescriptor: (_target, key) =>
-          key in translations
-            ? {
-                configurable: true,
-                enumerable: true,
-                writable: false,
-                value: resolve(key),
-              }
-            : undefined,
-      });
+      const result = {} as { [K in keyof T]: T[K][Locale] };
+
+      for (const key of Reflect.ownKeys(translations)) {
+        Object.defineProperty(result, key, {
+          configurable: true,
+          enumerable: true,
+          get() {
+            const value = resolve(key);
+
+            Object.defineProperty(result, key, {
+              value,
+              writable: false,
+              enumerable: true,
+              configurable: true,
+            });
+
+            return value;
+          },
+        });
+      }
+
+      return result;
     };
 }
 
