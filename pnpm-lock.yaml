@@ -9,6 +9,9 @@ catalogs:
     '@biomejs/biome':
       specifier: ^2.3.11
       version: 2.3.11
+    expect-type:
+      specifier: ^1.3.0
+      version: 1.3.0
     knip:
       specifier: ^5.81.0
       version: 5.81.0
@@ -93,6 +96,9 @@ importers:
 
   packages/micro-translate:
     devDependencies:
+      expect-type:
+        specifier: 'catalog:'
+        version: 1.3.0
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)

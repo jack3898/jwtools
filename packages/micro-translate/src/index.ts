@@ -22,17 +22,19 @@ type TranslationDict<Language extends string = string> = Record<
  * The translator returned by a `define(...)` call. Give it the active locale
  * and it resolves every key to that locale's value.
  *
- * Use this to type a value that should accept "the result of `define(...)`" —
- * for example a `useTranslation` hook — while preserving full inference of the
- * translation keys. Constrain a generic with it rather than annotating directly
- * so the concrete keys survive:
+ * Use this to name "the result of `define(...)`" when typing a value that holds
+ * one be it a prop, a context value, etc.
+ *
+ * To wrap a translator (e.g. a `useTranslation` hook), prefer pinning your
+ * locale union and inferring the resolved translations, which keeps the keys
+ * without a type assertion:
  *
  * @example ```tsx
- * import type { Translator } from "@jack3898/micro-translate";
+ * type Locale = "en" | "jp"; // your app's locales
  *
- * // `T` keeps the exact keys, so `t.welcome`/`t.submit` stay fully typed.
- * export function useTranslation<const T extends Translator>(translator: T) {
- *   const locale = useUserLocale(); // your locale source, e.g. "en" | "jp"
+ * // `T` is the resolved translations; the exact keys stay fully typed.
+ * export function useTranslation<T>(translator: (locale: Locale) => T): T {
+ *   const locale = useUserLocale(); // your locale source
  *   return translator(locale);
  * }
  * ```
@@ -46,18 +48,14 @@ export type Translator<
 
 /**
  * The resolved translations a {@link Translator} produces — every key mapped to
- * its value across the supported locales. Use it to annotate the return of a
- * wrapper such as a `useTranslation` hook so callers keep the exact key types:
+ * its value across the supported locales.
  *
- * @example ```tsx
- * import type { Translation, Translator } from "@jack3898/micro-translate";
+ * @example ```ts
+ * import type { Translation } from "@jack3898/micro-translate";
  *
- * export function useTranslation<const T extends Translator>(
- *   translator: T,
- * ): Translation<T> {
- *   const locale = useUserLocale(); // "en" | "jp"
- *   return translator(locale) as Translation<T>;
- * }
+ * const translator = define({ submit: { en: "Submit", jp: "Submitto" } });
+ *
+ * type T = Translation<typeof translator>; // { submit: "Submit" | "Submitto" }
  * ```
  */
 export type Translation<T extends Translator> = ReturnType<T>;
@@ -129,6 +127,8 @@ function isPluralKey(key: unknown): key is PluralKey {
 
 type TemplateKey = string | number | typeof $ | PluralKey;
 
+type TemplateIndexSymbol = typeof $;
+
 type UnionToIntersection<U> = (
   U extends unknown
     ? (arg: U) => void
@@ -141,14 +141,14 @@ type IndexedParams = { [index: number]: string };
 
 type PluralParam<Name extends string> = { [P in Name]: number };
 
-type NamedParam<Key extends PropertyKey> = { [P in Key]: string };
+type NamedParam<Key extends PropertyKey> = { [P in Key]: string | number };
 
 type NoParams = Record<never, never>;
 
 type FinalTemplateDict<Keys> = [Keys] extends [never]
   ? NoParams
   : UnionToIntersection<
-      Keys extends typeof $
+      Keys extends TemplateIndexSymbol
         ? IndexedParams
         : Keys extends PluralKey<infer Name>
           ? PluralParam<Name>

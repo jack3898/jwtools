@@ -15,7 +15,7 @@ const translator = defineTranslations({
   },
   // English needs two forms; Arabic needs six. Each locale declares its own.
   fileCount: {
-    en: msg`${plural("count", {
+    en: msg`${"msg"} ${plural("count", {
       one: "file",
       other: "files",
     })}`,
@@ -31,11 +31,26 @@ const translator = defineTranslations({
 });
 
 console.log(translator("en").greeting({ name: "World", surname: "ok" })); // "Hey World"
-console.log(translator("en").fileCount({ count: 1 }));
+console.log(translator("en").fileCount({ count: 1, msg: "" }));
 
 // The plural param requires a number; `Intl.PluralRules` picks the variant
 // per the active locale, so the same counts resolve differently per language.
 for (const count of [0, 1, 2, 3, 11]) {
-  console.log(`en ${count} ->`, translator("en").fileCount({ count }));
+  console.log(
+    `en ${count} ->`,
+    translator("en").fileCount({ count, msg: "ok" }),
+  );
   console.log(`ar ${count} ->`, translator("ar").fileCount({ count }));
 }
+
+// utility approach
+
+export function useTranslation<T>(translator: (locale: "en" | "ar") => T): T {
+  const locale = "ar"; // your locale source
+
+  return translator(locale);
+}
+
+const t = useTranslation(translator);
+
+void t.fileCount;
