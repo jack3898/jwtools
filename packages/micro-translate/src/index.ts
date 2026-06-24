@@ -66,20 +66,35 @@ export function createTranslationConfig<Language extends string>(
   return <const T extends TranslationDict<Language>>(
     translations: T,
   ): Translator<T, Language> =>
-    <Locale extends Language>(locale: Locale) =>
-      new Proxy({} as { [K in keyof T]: T[K][Locale] }, {
-        get: (_target, key) => {
-          const value = translations[key as keyof T]?.[locale];
+    <Locale extends Language>(locale: Locale) => {
+      // Resolves a single key for the active locale. Plain strings pass through;
+      // template values are locale-aware (e.g. pluralization), so the active
+      // locale is bound before the function is handed back to the caller.
+      const resolve = (key: PropertyKey) => {
+        const value = translations[key as keyof T]?.[locale];
 
-          // Template values are locale-aware (e.g. pluralization), so bind the
-          // active locale before handing the function back to the caller.
-          if (typeof value !== "function") {
-            return value;
-          }
+        if (typeof value !== "function") {
+          return value;
+        }
 
-          return (dict: never) => value(dict, locale);
-        },
+        return (dict: never) => value(dict, locale);
+      };
+
+      return new Proxy({} as { [K in keyof T]: T[K][Locale] }, {
+        get: (_target, key) => (key in translations ? resolve(key) : undefined),
+        has: (_target, key) => key in translations,
+        ownKeys: () => Reflect.ownKeys(translations),
+        getOwnPropertyDescriptor: (_target, key) =>
+          key in translations
+            ? {
+                configurable: true,
+                enumerable: true,
+                writable: false,
+                value: resolve(key),
+              }
+            : undefined,
       });
+    };
 }
 
 export const $ = Symbol("template-placeholder");
