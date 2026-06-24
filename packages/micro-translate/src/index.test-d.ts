@@ -21,11 +21,6 @@ import {
 const describe = (_name: string, fn: () => void): void => void fn;
 const it = (_name: string, fn: () => void): void => void fn;
 
-// Flattens an intersection (e.g. `{ a } & { b }`) into a single object literal
-// so structural equality reads naturally. The library builds multi-parameter
-// dicts as intersections internally; this is purely cosmetic for the assertion.
-type Prettify<T> = { [K in keyof T]: T[K] };
-
 describe("msg", () => {
   it("infers a single named parameter", () => {
     const greet = msg`Hey ${"name"}`;
@@ -34,10 +29,12 @@ describe("msg", () => {
     expectTypeOf(greet).returns.toEqualTypeOf<string>();
   });
 
-  it("infers multiple named parameters", () => {
+  it("infers multiple named parameters as a flat object literal", () => {
     const greet = msg`${"greeting"}, ${"name"}!`;
 
-    expectTypeOf<Prettify<Parameters<typeof greet>[0]>>().toEqualTypeOf<{
+    // No `Prettify` needed: `msg`'s return type inlines the flatten, so the
+    // param is already a single object literal rather than an intersection.
+    expectTypeOf(greet).parameter(0).toEqualTypeOf<{
       greeting: string | number;
       name: string | number;
     }>();
@@ -49,15 +46,12 @@ describe("msg", () => {
     expectTypeOf(message).parameter(0).toEqualTypeOf<{ 0: string | number }>();
   });
 
-  it("infers positional `$` placeholders as a string index signature", () => {
+  it("infers positional `$` placeholders as a string array", () => {
     const sentence = msg`${$} and ${$}`;
 
-    expectTypeOf(sentence)
-      .parameter(0)
-      .toEqualTypeOf<{ [index: number]: string }>();
-
-    // An array of strings satisfies the index signature.
-    expectTypeOf<string[]>().toExtend<{ [index: number]: string }>();
+    // `$` requires an actual array, not just any number-indexed object — this
+    // matches the runtime `Array.isArray` guard.
+    expectTypeOf(sentence).parameter(0).toEqualTypeOf<string[]>();
   });
 
   it("infers no parameters for a plain template", () => {
@@ -81,7 +75,7 @@ describe("msg", () => {
       other: "many files",
     })}`;
 
-    expectTypeOf<Prettify<Parameters<typeof summary>[0]>>().toEqualTypeOf<{
+    expectTypeOf(summary).parameter(0).toEqualTypeOf<{
       name: string | number;
       count: number;
     }>();

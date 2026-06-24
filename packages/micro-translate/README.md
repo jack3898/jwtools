@@ -42,7 +42,7 @@ Then in the code itself:
 const t = translator("en");
 
 console.log(t.submit); // "Submit"
-console.log(t.welcome("Jack")); // "Hey Jack"
+console.log(t.welcome({ name: "Jack" })); // "Hey Jack"
 ```
 
 ### Pluralization

@@ -4,7 +4,7 @@ type TranslationConfig<Languages> = {
 
 /**
  * A translation for a single locale: either a literal string, or a template
- * function (e.g. from `template`) that resolves to a string when given its
+ * function (e.g. from `msg`) that resolves to a string when given its
  * interpolation values and the active locale.
  */
 type TranslationValue = string | ((dict: never, locale?: string) => string);
@@ -103,12 +103,12 @@ type PluralKey<Name extends string = string> = {
 };
 
 /**
- * Declares a pluralized template parameter. Inside a `template`, the named
+ * Declares a pluralized template parameter. Inside a `msg`, the named
  * parameter is typed as a `number`, and the correct variant is selected at
  * render time using `Intl.PluralRules` for the active locale.
  *
  * @example ```ts
- * template`${plural("count", { one: "file", other: "files" })}`;
+ * msg`${plural("count", { one: "file", other: "files" })}`;
  * ```
  *
  * @param name The parameter name; its value must be a `number`
@@ -125,6 +125,24 @@ function isPluralKey(key: unknown): key is PluralKey {
   return typeof key === "object" && key !== null && pluralBrand in key;
 }
 
+/**
+ * Memoizes one {@link Intl.PluralRules} per locale. Constructing these is
+ * comparatively expensive, and templates resolve on every key access, so we
+ * reuse a shared instance keyed by locale (`undefined` for the runtime default).
+ */
+const pluralRulesCache = new Map<string | undefined, Intl.PluralRules>();
+
+function getPluralRules(locale?: string): Intl.PluralRules {
+  let rules = pluralRulesCache.get(locale);
+
+  if (!rules) {
+    rules = new Intl.PluralRules(locale);
+    pluralRulesCache.set(locale, rules);
+  }
+
+  return rules;
+}
+
 type TemplateKey = string | number | typeof $ | PluralKey;
 
 type TemplateIndexSymbol = typeof $;
@@ -137,7 +155,7 @@ type UnionToIntersection<U> = (
   ? I
   : never;
 
-type IndexedParams = { [index: number]: string };
+type IndexedParams = string[];
 
 type PluralParam<Name extends string> = { [P in Name]: number };
 
@@ -160,24 +178,43 @@ type FinalTemplateDict<Keys> = [Keys] extends [never]
 export function msg<const Keys extends readonly TemplateKey[]>(
   strings: TemplateStringsArray,
   ...keys: Keys
-): (dict: FinalTemplateDict<Keys[number]>) => string {
+): (
+  dict: {
+    // Inlined `{ [K in keyof T]: T[K] }` flattens the computed dict (which is
+    // built from intersections internally) into a single object literal, so it
+    // hovers as the resolved shape instead of `A & B`. The mapping is homomorphic,
+    // so the `$` array form is preserved as `string[]` rather than mangled.
+    [K in keyof FinalTemplateDict<Keys[number]>]: FinalTemplateDict<
+      Keys[number]
+    >[K];
+  },
+) => string {
   const render = (
-    dict: FinalTemplateDict<Keys[number]>,
+    dict: {
+      [K in keyof FinalTemplateDict<Keys[number]>]: FinalTemplateDict<
+        Keys[number]
+      >[K];
+    },
     locale?: string,
   ): string => {
     const values = dict as Record<PropertyKey, string | number>;
     const result = [strings[0]];
 
+    // `$` placeholders are positional: each one consumes the next array element
+    // in order of appearance, independent of where it sits among `keys`.
+    let placeholderIndex = 0;
+
     for (const [i, key] of keys.entries()) {
       if (key === $ && Array.isArray(dict)) {
-        result.push(dict[i], strings[i + 1]);
+        result.push(dict[placeholderIndex], strings[i + 1]);
+        placeholderIndex++;
 
         continue;
       }
 
       if (isPluralKey(key)) {
         const count = Number(values[key.name]);
-        const category = new Intl.PluralRules(locale).select(count);
+        const category = getPluralRules(locale).select(count);
 
         result.push(
           key.variants[category] ?? key.variants.other,
