@@ -1,3 +1,4 @@
+import { getNumberFormat, isNumKey, type NumKey } from "./num";
 import {
   isOrdinalKey,
   type OrdinalKey,
@@ -21,7 +22,7 @@ export type Msg = ((
   [msgBrand]: true;
 };
 
-type TemplateKey = string | PluralKey | OrdinalKey;
+type TemplateKey = string | PluralKey | OrdinalKey | NumKey;
 
 type UnionToIntersection<U> = (
   U extends unknown
@@ -44,9 +45,11 @@ type FinalTemplateDict<Keys> = [Keys] extends [never]
         ? NumberParam<Name>
         : Keys extends OrdinalKey<infer Name>
           ? NumberParam<Name>
-          : Keys extends string
-            ? NamedParam<Keys>
-            : NoParams
+          : Keys extends NumKey<infer Name>
+            ? NumberParam<Name>
+            : Keys extends string
+              ? NamedParam<Keys>
+              : NoParams
     >;
 
 // Inlined `{ [K in keyof T]: T[K] }` flattens the computed dict (which is built
@@ -109,6 +112,17 @@ export function msg<const Keys extends readonly TemplateKey[]>(
 
         result.push(
           `${count}${ordinals[category] ?? ordinals.other}`,
+          strings[i + 1],
+        );
+
+        continue;
+      }
+
+      if (isNumKey(key)) {
+        const count = Number(values[key.name]);
+
+        result.push(
+          getNumberFormat(locale, key.options).format(count),
           strings[i + 1],
         );
 

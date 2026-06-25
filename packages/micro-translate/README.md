@@ -22,6 +22,7 @@ This package uses native [`Intl.PluralRules`](https://developer.mozilla.org/en-U
 | `msg`                     | A template literal for translations with named parameters.        |
 | `plural`                  | Selects wording for a count using `Intl.PluralRules`.             |
 | `ordinal`                 | Renders a number with its locale's ordinal suffix (`1` → `1st`).  |
+| `num`                     | Formats a number for the locale using `Intl.NumberFormat`.        |
 | `ref`                     | Aliases one locale to another for character-for-character copies. |
 | `todo`                    | Stubs an untranslated entry, falling back to the default locale.  |
 
@@ -162,6 +163,43 @@ define({
   place: { en: msg`${ordinal("place")}` },
   //           ^ ❌ ordinal() requires "ordinals" to be configured in createTranslationConfig
 });
+```
+
+### Number formatting
+
+`num` formats a number for the active locale with `Intl.NumberFormat` — grouping separators, decimals, currency, percent, and so on. It needs no config; the locale alone drives the formatting.
+
+```ts
+import { createTranslationConfig, msg, num } from "@jack3898/micro-translate";
+
+const define = createTranslationConfig({
+  languages: ["en", "de"],
+  default: "en",
+});
+
+const translator = define({
+  available: {
+    en: msg`There are ${num("count")} available`,
+    de: msg`Es sind ${num("count")} verfügbar`,
+  },
+});
+
+translator("en").available({ count: 1234567 }); // "There are 1,234,567 available"
+translator("de").available({ count: 1234567 }); // "Es sind 1.234.567 verfügbar"
+```
+
+Pass any [`Intl.NumberFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat#options) as the second argument for currency, percent, fixed decimals, etc.:
+
+```ts
+const translator = define({
+  price: {
+    en: msg`${num("amount", { style: "currency", currency: "USD" })}`,
+    de: msg`${num("amount", { style: "currency", currency: "EUR" })}`,
+  },
+});
+
+translator("en").price({ amount: 1234.5 }); // "$1,234.50"
+translator("de").price({ amount: 1234.5 }); // "1.234,50 €"
 ```
 
 ### Deliberate aliasing with `ref()`

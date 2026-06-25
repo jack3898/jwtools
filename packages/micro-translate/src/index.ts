@@ -123,6 +123,7 @@ export function createTranslationConfig<
 }
 
 export { type Msg, msg } from "./msg";
+export { num } from "./num";
 export { type OrdinalVariants, ordinal } from "./ordinal";
 export { plural } from "./plural";
 export { type Ref, ref, type TodoRef, todo } from "./ref";
