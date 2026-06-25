@@ -2,16 +2,20 @@ import {
   createTranslationConfig,
   msg,
   plural,
+  ref,
+  todo,
 } from "@jack3898/micro-translate";
 
 const defineTranslations = createTranslationConfig({
-  languages: ["en", "ar"],
+  languages: ["en", "ar", "gg"],
+  default: "en",
 });
 
 const translator = defineTranslations({
   greeting: {
     en: msg`Hey ${"name"} ${"surname"}`,
     ar: msg`مرحبا ${"name"} ${"surname"}`,
+    gg: "",
   },
   // English needs two forms; Arabic needs six. Each locale declares its own.
   fileCount: {
@@ -19,6 +23,7 @@ const translator = defineTranslations({
       one: "file",
       other: "files",
     })}`,
+    gg: "",
     ar: msg`${plural("count", {
       zero: "لا ملفات",
       one: "ملف واحد",
@@ -42,6 +47,24 @@ for (const count of [0, 1, 2, 3, 11]) {
   );
   console.log(`ar ${count} ->`, translator("ar").fileCount({ count }));
 }
+
+// `ref()` forwards a locale to another's identical value; `todo()` stubs an
+// untranslated entry, falling back to the configured default ("en").
+const aliased = defineTranslations({
+  submit: {
+    en: "Submit",
+    ar: ref("en"), // intentional: identical to English
+    gg: ref("en"),
+  },
+  welcome: {
+    en: msg`Hey ${"name"}`,
+    gg: msg`Ok`,
+    ar: todo(), // not translated yet -> falls back to "en"
+  },
+});
+
+console.log(aliased("ar").submit); // "Submit"
+console.log(aliased("ar").welcome({ name: "world" })); // "Hey World" (fallback)
 
 // utility approach
 

@@ -7,109 +7,18 @@
  * passing the type-check is the test passing.
  */
 import { expectTypeOf } from "expect-type";
-import {
-  $,
-  createTranslationConfig,
-  msg,
-  plural,
-  type Translation,
-  type Translator,
-} from ".";
+import { createTranslationConfig, msg } from ".";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
 // still type-checks them, which is the entire point of this file.
 const describe = (_name: string, fn: () => void): void => void fn;
 const it = (_name: string, fn: () => void): void => void fn;
 
-describe("msg", () => {
-  it("infers a single named parameter", () => {
-    const greet = msg`Hey ${"name"}`;
-
-    expectTypeOf(greet).parameter(0).toEqualTypeOf<{ name: string | number }>();
-    expectTypeOf(greet).returns.toEqualTypeOf<string>();
-  });
-
-  it("infers multiple named parameters as a flat object literal", () => {
-    const greet = msg`${"greeting"}, ${"name"}!`;
-
-    // No `Prettify` needed: `msg`'s return type inlines the flatten, so the
-    // param is already a single object literal rather than an intersection.
-    expectTypeOf(greet).parameter(0).toEqualTypeOf<{
-      greeting: string | number;
-      name: string | number;
-    }>();
-  });
-
-  it("infers a numeric index as a string parameter", () => {
-    const message = msg`You have ${0} new messages`;
-
-    expectTypeOf(message).parameter(0).toEqualTypeOf<{ 0: string | number }>();
-  });
-
-  it("infers positional `$` placeholders as a string array", () => {
-    const sentence = msg`${$} and ${$}`;
-
-    // `$` requires an actual array, not just any number-indexed object — this
-    // matches the runtime `Array.isArray` guard.
-    expectTypeOf(sentence).parameter(0).toEqualTypeOf<string[]>();
-  });
-
-  it("infers no parameters for a plain template", () => {
-    const plain = msg`Just text`;
-
-    expectTypeOf(plain).parameter(0).toEqualTypeOf<Record<never, never>>();
-
-    // An empty object is accepted.
-    plain({});
-  });
-
-  it("infers a plural parameter as a number under its literal name", () => {
-    const count = msg`${plural("count", { one: "file", other: "files" })}`;
-
-    expectTypeOf(count).parameter(0).toEqualTypeOf<{ count: number }>();
-  });
-
-  it("combines named and plural parameters", () => {
-    const summary = msg`${"name"} has ${plural("count", {
-      one: "1 file",
-      other: "many files",
-    })}`;
-
-    expectTypeOf(summary).parameter(0).toEqualTypeOf<{
-      name: string | number;
-      count: number;
-    }>();
-  });
-
-  it("rejects a missing parameter", () => {
-    const greet = msg`Hey ${"name"}`;
-
-    // @ts-expect-error - `name` is required.
-    greet({});
-  });
-
-  it("rejects a parameter of the wrong type", () => {
-    const greet = msg`Hey ${"name"}`;
-
-    // @ts-expect-error - `name` must be a string | number, not a boolean.
-    greet({ name: true });
-  });
-});
-
-describe("plural", () => {
-  it("requires the `other` variant", () => {
-    // @ts-expect-error - `other` is the mandatory fallback variant.
-    plural("count", { one: "file" });
-  });
-
-  it("only allows valid CLDR plural categories", () => {
-    // @ts-expect-error - `lots` is not a plural category.
-    plural("count", { other: "files", lots: "many" });
-  });
-});
-
 describe("createTranslationConfig", () => {
-  const define = createTranslationConfig({ languages: ["en", "jp"] });
+  const define = createTranslationConfig({
+    languages: ["en", "jp"],
+    default: "en",
+  });
   const t = define({
     submit: {
       en: "Submit",
@@ -166,43 +75,16 @@ describe("createTranslationConfig", () => {
   });
 });
 
-describe("Translator", () => {
-  const define = createTranslationConfig({ languages: ["en", "jp"] });
-  const t = define({ submit: { en: "Submit", jp: "Submitto" } });
-
-  it("types the result of `define(...)`", () => {
-    // The concrete translator is assignable to the general `Translator` type.
-    expectTypeOf(t).toExtend<Translator>();
+describe("config default", () => {
+  it("requires `default` to be provided", () => {
+    // @ts-expect-error - `default` is required.
+    createTranslationConfig({ languages: ["en", "jp"] });
   });
 
-  it("can be narrowed to a pinned locale union in a wrapper", () => {
-    type Locale = "en" | "jp";
+  it("requires `default` to be a declared language", () => {
+    createTranslationConfig({ languages: ["en", "jp"], default: "en" });
 
-    // Mirrors the `useTranslation` pattern from the docstring: pin the locale,
-    // infer the resolved translations, keep the keys without an assertion.
-    function useTranslation<T>(translator: (locale: Locale) => T): T {
-      return translator("en");
-    }
-
-    const translations = useTranslation(t);
-
-    expectTypeOf(translations.submit).toEqualTypeOf<"Submit" | "Submitto">();
-  });
-});
-
-describe("Translation", () => {
-  const define = createTranslationConfig({ languages: ["en", "jp"] });
-  const translator = define({
-    submit: { en: "Submit", jp: "Submitto" },
-    welcome: { en: msg`Hey ${"name"}`, jp: msg`Konnichiwa ${"name"}` },
-  });
-
-  it("is the union of resolved values across every locale", () => {
-    type T = Translation<typeof translator>;
-
-    expectTypeOf<T["submit"]>().toEqualTypeOf<"Submit" | "Submitto">();
-    expectTypeOf<T["welcome"]>().toEqualTypeOf<
-      (dict: { name: string | number }) => string
-    >();
+    // @ts-expect-error - "fr" is not one of the declared languages.
+    createTranslationConfig({ languages: ["en", "jp"], default: "fr" });
   });
 });

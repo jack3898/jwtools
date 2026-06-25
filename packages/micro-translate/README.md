@@ -1,6 +1,30 @@
 # Micro Translate
 
-Ultra type-safe translations that don't fight your toolchain. Works in any application and uses native APIs.
+Type-safe translations that don't fight your toolchain.
+
+Zero dependencies, fully type-inferred parameters, colocated translations, tree-shakeable, native Intl APIs.
+
+## Installation
+
+```sh
+npm install @jack3898/micro-translate
+```
+
+## Requirements
+
+This package uses native [`Intl.PluralRules`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/PluralRules), available in Node 13+ and all modern browsers. It is distributed as ESM only (see [Note on module type](#note-on-module-type)).
+
+## API at a glance
+
+| Export                    | Purpose                                                           |
+| ------------------------- | ----------------------------------------------------------------- |
+| `createTranslationConfig` | Declares your supported languages and the default locale.         |
+| `msg`                     | A template literal for translations with named parameters.        |
+| `plural`                  | Selects wording for a count using `Intl.PluralRules`.             |
+| `ref`                     | Aliases one locale to another for character-for-character copies. |
+| `todo`                    | Stubs an untranslated entry, falling back to the default locale.  |
+
+That's it!
 
 ## How to use it
 
@@ -9,32 +33,36 @@ Ultra type-safe translations that don't fight your toolchain. Works in any appli
 Declare the languages you support, then provide a translation for every key in every language.
 
 ```ts
-import { createTranslationConfig, msg } from "@jack3898/micro-translate";
+// i18n.ts
+import { createTranslationConfig } from "@jack3898/micro-translate";
 
 export const define = createTranslationConfig({
-  languages: ["en", "jp"],
+  languages: ["en", "ja"],
+  default: "en", // required and strictly typed to the above `languages` array
 });
 ```
+
+`default` is used for incremental rollouts of new languages with [`todo()`](#incremental-rollout-with-todo)!
 
 Then in your module define your translations:
 
 ```tsx
 import { msg } from "@jack3898/micro-translate";
-import { translations } from "../../your-i18n";
+import { define } from "../../i18n";
 
 const translator = define({
   submit: {
     en: "Submit",
-    jp: "Submitto",
+    ja: "Submitto",
   },
   welcome: {
     en: msg`Hey ${"name"}`,
-    jp: msg`Konnichiwa ${"name"}`,
+    ja: msg`Konnichiwa ${"name"}`,
   },
 });
 ```
 
-Every key must cover every declared language - miss one and TypeScript will tell you. Support for partial localization may come in the future! But for now that may be a limitation for you.
+You must provide a value for every language. Again, please see below on this library's approach to partial rollouts with [`todo()`](#incremental-rollout-with-todo)!
 
 Then in the code itself:
 
@@ -43,7 +71,10 @@ const t = translator("en");
 
 console.log(t.submit); // "Submit"
 console.log(t.welcome({ name: "Jack" })); // "Hey Jack"
+console.log(t.welcome({ surname: "Surname" })); // ❌ "'surname' does not exist on type" and "'name' is missing in type" type errors
 ```
+
+The parameters to the template are typed fully and inferred from the `msg` template literal you defined above.
 
 ### Pluralization
 
@@ -58,6 +89,7 @@ import {
 
 const define = createTranslationConfig({
   languages: ["en"],
+  default: "en",
 });
 
 const pluralFiles = plural("count", {
@@ -71,12 +103,13 @@ const translator = define({
   },
 });
 
-translator("en").fileCount({ count: 1 }); // "You have 1 file"
-translator("en").fileCount({ count: 5 }); // "You have many files"
+const t = translator("en");
+
+t.fileCount({ count: 1 }); // "You have 1 file"
+t.fileCount({ count: 5 }); // "You have many files"
 ```
 
-The active locale flows automatically from `translator("en")` into the plural, so each language uses its own rules. Arabic, for instance, has six plural categories where English has two. When a category is omitted, it falls back to
-`other`.
+The active locale flows automatically from `translator("en")` into the plural, so each language uses its own rules. Arabic, for instance, has six plural categories where English has two. When a category is omitted, it falls back to `other`.
 
 You can mix plain text, named parameters and plurals in one template:
 
@@ -87,34 +120,94 @@ msg`${"name"} has ${pluralFiles}`;
 // call with { name: "Ada", count: 1 } -> "Ada has 1 file"
 ```
 
-### Placeholder approach
+### Deliberate aliasing with `ref()`
 
-Not sure what to name your translation keys? Or only have one and want a little less boilerplate? Use the handy `$` helper.
-
-```ts
-import { $, msg } from "@jack3898/micro-translate";
-
-msg`Hey ${$}`;
-// call with an array ["Jack"] -> "Hey Jack"
-```
-
-### Index approach
-
-Placeholders have a fixed order. But you can use numbers too as your keys.
+English is a great example: `en-us`, `en-gb` and `en-au` agree on most words but diverge on a handful. Rather than copy-pasting the identical ones (and risking them drifting apart), forward one locale to another in the same key with `ref()`:
 
 ```ts
-import { msg } from "@jack3898/micro-translate";
+// ...imports
 
-msg`Hey ${0}, ${1}`;
-// call with an array ["Jack", "what's up?"] -> "Hey Jack, what's up?"
+const define = createTranslationConfig({
+  languages: ["en-gb", "en-us", "en-au"],
+  default: "en-gb",
+});
+
+const translator = define({
+  // Every dialect agrees, so forward to the base.
+  submit: {
+    "en-gb": "Submit",
+    "en-us": ref("en-gb"),
+    "en-au": ref("en-gb"),
+  },
+  // GB differs; US and AU share the same word, so AU forwards to US.
+  carPark: {
+    "en-gb": "Car park",
+    "en-us": "Parking lot",
+    "en-au": ref("en-us"), // forward to a dialect, not just the default
+  },
+  // GB and AU share the spelling here; US diverges on its own.
+  colour: {
+    "en-gb": "Colour",
+    "en-us": "Color",
+    "en-au": ref("en-gb"),
+  },
+});
+
+translator("en-au").submit; // "Submit"   (via en-gb)
+translator("en-au").carPark; // "Parking lot" (via en-us)
+translator("en-au").colour; // "Colour"   (via en-gb)
+translator("en-us").colour; // "Color"    (its own value)
 ```
+
+`ref(target)` resolves to **exactly** the target's value for that key like a literal copy/paste. A plain string forwards the string; a `msg`/`plural` template forwards the same callable with the same call signature, and pluralization runs under the **caller's** active locale, just as a paste would.
+
+It's only for character-for-character identical translations - there's no override mechanism. If a locale diverges in any way (wording, order, plural rules), write a fresh template for it instead. This keeps your translations explicit and simple!
+
+Two rules keep it safe, enforced at compile time **and** guarded at runtime:
+
+1. The target must be another locale in the same key. `ref("fr")` where `fr` isn't a sibling is an error.
+2. The target must be a real value, never another `ref()`/`todo()`. This one-hop rule makes chains, cycles and self-reference structurally impossible.
+
+### Incremental rollout with `todo()`
+
+`todo()` stubs an entry you haven't translated yet. It's a thin wrapper over `ref()` that forwards to your configured `default` - same brand, same behavior - so it resolves to the default locale's value and every `ref()` rule applies to it automatically. It's a plain top-level import; the `default` is supplied for you when the entry resolves:
+
+```ts
+// ...imports
+
+const define = createTranslationConfig({
+  languages: ["en-gb", "en-us", "en-au"],
+  default: "en-gb",
+});
+
+const translator = define({
+  welcome: {
+    "en-gb": msg`Hey ${"name"}`,
+    "en-us": ref("en-gb"), // permanent: identical to British English
+    "en-au": todo(), // stub: not localized yet, falls back to "en-gb"
+  },
+});
+
+translator("en-au").welcome({ name: "Jack" }); // "Hey Jack" (fallback)
+```
+
+This gives you gap-free incremental localization:
+
+1. Add a new locale to `languages`. TypeScript errors on every key missing it - a complete worklist.
+2. Stub each one with `todo()`. The app compiles and ships, users get the default-locale fallback.
+3. Track the backlog with `grep -rn 'todo()' src/` - your exact list of what's left.
+4. Replace each `todo()` with a real template at your own pace. Every step compiles and ships.
+
+This keeps your translations explicit at every stage.
 
 ### Wrapping the translator (e.g. a `useTranslation` hook in React)
 
-Often you'll want to fetch the active locale once be it from context, a logged-in user, etc. and hand back a ready-to-use translator. Pin your app's locale union and let the wrapper infer the resolved translations. The keys flow through untouched, no type assertion needed:
+Often you'll want to fetch the active locale once — from a context, a logged-in user, etc. — and hand back a ready-to-use translator. Here's an example in React which just wraps over a passed in translator and picks the right language:
 
 ```tsx
-type Locale = "en" | "jp"; // your app's locales
+// ...imports
+
+type Locale = "en" | "ja"; // your app's locales
 
 export function useTranslation<T>(translator: (locale: Locale) => T): T {
   const locale = useUserLocale(); // your locale source e.g. user query
@@ -126,11 +219,11 @@ export function useTranslation<T>(translator: (locale: Locale) => T): T {
 Then a component passes its colocated translator straight in and keeps full autocomplete and type-safety on every key:
 
 ```tsx
-import { define } from "../../i18n";
+// ...imports
 
 const translator = define({
-  submit: { en: "Submit", jp: "Submitto" },
-  welcome: { en: msg`Hey ${"name"}`, jp: msg`Konnichiwa ${"name"}` },
+  submit: { en: "Submit", ja: "Submitto" },
+  welcome: { en: msg`Hey ${"name"}`, ja: msg`Konnichiwa ${"name"}` },
 });
 
 function MyComponent() {
@@ -140,13 +233,9 @@ function MyComponent() {
 }
 ```
 
-If you mix keys across languages, then the type system will merge all available keys for you to make sure that no matter the language, the template is satisfied.
-
-Two type helpers are exported if you need to name these types elsewhere (a prop, a context value, etc.): `Translator` is "the result of `define(...)`", and `Translation<T>` is what such a translator resolves to.
-
 ## Embrace colocation!
 
-One major philosophical change this package introduces is defining translations per component or module. Where you need language, you have the translations right there for reference. This is a major departure from the norm and I think this is fine for most applications.
+One major philosophical change this package introduces is defining translations per component or module. Where you need language, you have the translations right there for reference. This is a deliberate departure from convention that suits most applications.
 
 Global translations can be hard to maintain for a variety of reasons. They can give a false sense of reuse, create stale translations, end up massive, and it becomes a complete chore to update.
 
@@ -156,7 +245,7 @@ This package is not for enterprise grade software and does not seek to replace o
 
 The design of this code favours developer experience, type safety, simplicity, package size and translation colocation by design. Each module needs all translations, which means users will be loading other translations not relevant to them in addition to their selected language if this is used in a frontend. One perk is that switching languages will be instantaneous for end users.
 
-The main remedy to this is this package is tree-shakeable by design, and as such that comes for free. But for every branch in that tree, is a bundle of languages translated relevant to that branch. It should be noted that translations compress well, and are usually fairly small on their own so this may not be a problem depending on your situation. You may find that lazy loading more parts of your app is a good solution.
+The main remedy is tree-shaking, which comes for free, but every branch of that tree still bundles all languages relevant to it. It should be noted that translations compress well, and are usually fairly small on their own so this may not be a problem depending on your situation. You may find that lazy loading more parts of your app is a good solution. But for large codebases with tens of languages, this is potentially not suitable and you should measure whether this will work for you in the context of your requirements.
 
 In addition, this package does not provide an easy way for translators to update your translations as your translations live in source code. This is either something you can work around, or a genuine problem. This codebase does not offer any solutions in that regard.
 
@@ -167,3 +256,7 @@ All in all, this should give you 90% of what you need without all the fluff!
 This package is distributed with ESM syntax only.
 
 I apologise in advance for any inconvenience this may cause.
+
+## License
+
+Apache-2.0
