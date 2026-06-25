@@ -1,9 +1,10 @@
 const pluralBrand = Symbol("micro-translate/plural");
 
 /**
- * The plural categories defined by Unicode CLDR / `Intl.PluralRules`.
+ * The plural categories defined by Unicode CLDR / `Intl.PluralRules`. Shared by
+ * cardinal plurals and ordinals (which use a subset).
  */
-type PluralRule = "zero" | "one" | "two" | "few" | "many" | "other";
+export type PluralRule = "zero" | "one" | "two" | "few" | "many" | "other";
 
 /**
  * The variant strings for a plural; `other` is the required fallback.
@@ -40,18 +41,23 @@ export function isPluralKey(key: unknown): key is PluralKey {
 }
 
 /**
- * Memoizes one {@link Intl.PluralRules} per locale. Constructing these is
+ * Memoizes one {@link Intl.PluralRules} per locale + type. Constructing these is
  * comparatively expensive, and templates resolve on every key access, so we
- * reuse a shared instance keyed by locale (`undefined` for the runtime default).
+ * reuse a shared instance keyed by `type:locale` (empty locale for the runtime
+ * default). Ordinals (`type: "ordinal"`) reuse this same cache.
  */
-const pluralRulesCache = new Map<string | undefined, Intl.PluralRules>();
+const pluralRulesCache = new Map<string, Intl.PluralRules>();
 
-export function getPluralRules(locale?: string): Intl.PluralRules {
-  let rules = pluralRulesCache.get(locale);
+export function getPluralRules(
+  locale?: string,
+  type: Intl.PluralRulesOptions["type"] = "cardinal",
+): Intl.PluralRules {
+  const cacheKey = `${type}:${locale ?? ""}`;
+  let rules = pluralRulesCache.get(cacheKey);
 
   if (!rules) {
-    rules = new Intl.PluralRules(locale);
-    pluralRulesCache.set(locale, rules);
+    rules = new Intl.PluralRules(locale, { type });
+    pluralRulesCache.set(cacheKey, rules);
   }
 
   return rules;

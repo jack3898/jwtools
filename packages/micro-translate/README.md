@@ -18,9 +18,10 @@ This package uses native [`Intl.PluralRules`](https://developer.mozilla.org/en-U
 
 | Export                    | Purpose                                                           |
 | ------------------------- | ----------------------------------------------------------------- |
-| `createTranslationConfig` | Declares your supported languages and the default locale.         |
+| `createTranslationConfig` | Declares your supported languages, the default locale, and ordinals. |
 | `msg`                     | A template literal for translations with named parameters.        |
 | `plural`                  | Selects wording for a count using `Intl.PluralRules`.             |
+| `ordinal`                 | Renders a number with its locale's ordinal suffix (`1` → `1st`).  |
 | `ref`                     | Aliases one locale to another for character-for-character copies. |
 | `todo`                    | Stubs an untranslated entry, falling back to the default locale.  |
 
@@ -118,6 +119,49 @@ const pluralFiles = plural("count", { one: "1 file", other: "many files" });
 
 msg`${"name"} has ${pluralFiles}`;
 // call with { name: "Ada", count: 1 } -> "Ada has 1 file"
+```
+
+### Ordinals
+
+`ordinal` renders a number with its locale's ordinal suffix — `1` → `"1st"`, `22` → `"22nd"`. Like `plural` it selects the category with `Intl.PluralRules` (in `ordinal` mode, sharing the same cache). _Unlike_ `plural`, the suffixes are a property of the **language**, not the message — `st/nd/rd/th` is the same for every ordinal in English — so you declare them once per locale in the config rather than at each call site:
+
+```ts
+import { createTranslationConfig, msg, ordinal } from "@jack3898/micro-translate";
+
+const define = createTranslationConfig({
+  languages: ["en", "ja", "fr"],
+  default: "en",
+  ordinals: {
+    en: { one: "st", two: "nd", few: "rd", other: "th" },
+    ja: { other: "番目" },
+    fr: { one: "er", other: "e" },
+  },
+});
+
+const translator = define({
+  finished: {
+    en: msg`You came ${ordinal("place")}`,
+    ja: msg`${ordinal("place")}`,
+    fr: msg`Vous êtes ${ordinal("place")}`,
+  },
+});
+
+translator("en").finished({ place: 22 }); // "You came 22nd"
+translator("ja").finished({ place: 1 }); // "1番目"
+translator("fr").finished({ place: 1 }); // "Vous êtes 1er"
+```
+
+The number is prepended for you, and the category respects each locale's CLDR rules (so English `21` is `"21st"` but `11` is `"11th"`). A missing category falls back to `other`.
+
+`ordinals` is optional — but the moment any template uses `ordinal()`, TypeScript **requires** it (and requires it to cover every language). You can't ship an `ordinal()` whose suffixes you forgot to declare:
+
+```ts
+const define = createTranslationConfig({ languages: ["en"], default: "en" }); // no `ordinals`
+
+define({
+  place: { en: msg`${ordinal("place")}` },
+  //           ^ ❌ ordinal() requires "ordinals" to be configured in createTranslationConfig
+});
 ```
 
 ### Deliberate aliasing with `ref()`

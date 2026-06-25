@@ -1,3 +1,4 @@
+import type { RequiresOrdinals } from "./ordinal";
 import type { AnyRef, Ref, TodoRef } from "./ref";
 
 /**
@@ -56,7 +57,11 @@ export type Translator<
  * target is never itself a marker, so resolution terminates in a single hop —
  * no recursion, no depth limits.
  */
-export type ResolveValue<Entry, V, Default extends string> = V extends TodoRef
+export type ResolveValue<Entry, V, Default extends string> = StripOrdinal<
+  ResolveRaw<Entry, V, Default>
+>;
+
+type ResolveRaw<Entry, V, Default extends string> = V extends TodoRef
   ? Default extends keyof Entry
     ? Entry[Default]
     : never
@@ -67,29 +72,55 @@ export type ResolveValue<Entry, V, Default extends string> = V extends TodoRef
     : V;
 
 /**
+ * `msg` carries a phantom {@link RequiresOrdinals} marker on ordinal templates
+ * so `define` can require `ordinals`. Strip it from the resolved type by
+ * rebuilding the call signature, which drops the extra property.
+ */
+type StripOrdinal<V> = V extends RequiresOrdinals
+  ? V extends (...args: infer A) => infer R
+    ? (...args: A) => R
+    : V
+  : V;
+
+/**
  * Validates a `define(...)` argument at the type level. Each locale value is
  * checked against the `ref`/`todo` rules and, when it breaks one, replaced with
  * a descriptive error-message string. Intersecting this with the original dict
  * (see {@link createTranslationConfig}) makes the offending entry unassignable,
  * surfacing the message as a compile error.
  */
-export type ValidateDict<T extends TranslationDict, Default extends string> = {
-  [K in keyof T]: { [L in keyof T[K]]: ValidateValue<T[K], T[K][L], Default> };
+export type ValidateDict<
+  T extends TranslationDict,
+  Default extends string,
+  HasOrdinals extends boolean,
+> = {
+  [K in keyof T]: {
+    [L in keyof T[K]]: ValidateValue<T[K], T[K][L], Default, HasOrdinals>;
+  };
 };
 
-type ValidateValue<Entry, V, Default extends string> = V extends TodoRef
-  ? Default extends keyof Entry
-    ? Entry[Default] extends AnyRef
-      ? `❌ todo() used on the default locale "${Default & string}" — there's nothing to fall back to`
-      : V
-    : V
-  : V extends Ref<infer Target>
-    ? Target extends keyof Entry
-      ? Entry[Target] extends AnyRef
-        ? `❌ ref("${Target & string}") points at another ref() — point at a real value`
+type ValidateValue<
+  Entry,
+  V,
+  Default extends string,
+  HasOrdinals extends boolean,
+> = V extends RequiresOrdinals
+  ? HasOrdinals extends true
+    ? V
+    : `❌ ordinal() requires "ordinals" to be configured in createTranslationConfig`
+  : V extends TodoRef
+    ? Default extends keyof Entry
+      ? Entry[Default] extends AnyRef
+        ? `❌ todo() used on the default locale "${Default & string}" — there's nothing to fall back to`
         : V
-      : `❌ ref("${Target & string}") target does not exist`
-    : V;
+      : V
+    : V extends Ref<infer Target>
+      ? Target extends keyof Entry
+        ? Entry[Target] extends AnyRef
+          ? `❌ ref("${Target & string}") points at another ref() — point at a real value`
+          : V
+        : `❌ ref("${Target & string}") target does not exist`
+      : V;
 
 /**
  * The resolved translations a {@link Translator} produces — every key mapped to
