@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { msg } from ".";
 
-describe(msg.name, () => {
+describe("msg", () => {
   it("interpolates a single named parameter", () => {
     const greet = msg`Hey ${"name"}`;
 

@@ -29,7 +29,14 @@
     }
   },
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./intl": {
+      "types": "./dist/intl.d.ts",
+      "import": "./dist/intl.js"
+    }
   },
   "devDependencies": {
     "expect-type": "catalog:",
@@ -57,5 +64,5 @@
     "vanilla"
   ],
   "repository": "jack3898/jwtools.git",
-  "types": "./dist/core.d.ts"
+  "types": "./dist/index.d.ts"
 }

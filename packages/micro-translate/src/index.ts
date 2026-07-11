@@ -1,6 +1,6 @@
 import { isMsg } from "./msg";
-import type { OrdinalVariants } from "./ordinal";
 import { isRef } from "./ref";
+import { tool as bareTool, type ToolKey } from "./tool";
 import type {
   ResolveValue,
   TranslationDict,
@@ -12,49 +12,40 @@ import type {
 type TranslationConfig<
   Language extends string,
   Default extends Language,
-  Ordinals,
+  Config,
 > = {
   languages: Language[];
-  /**
-   * The locale {@link todo} falls back to. Must be a member of `languages`
-   * (anything else is a compile error).
-   */
   default: Default;
-  /**
-   * Per-locale ordinal suffixes used by {@link ordinal}. Optional, but if any
-   * template uses `ordinal()` it becomes required (a compile error otherwise),
-   * and it must cover every language.
-   */
-  ordinals?: Ordinals;
+  configs?: Config;
 };
 
-// Whether the config declared `ordinals`. Drives the compile-time gate on
-// `ordinal()`. `Ordinals` defaults to `undefined` when omitted.
-type HasOrdinals<Ordinals> = [Ordinals] extends [undefined] ? false : true;
+type VendedTool<
+  Language extends string,
+  Config extends Record<Language, unknown>,
+> = <const Name extends string, V>(
+  name: Name,
+  format: (value: V, locale: Language, config: Config[Language]) => string,
+) => ToolKey<Name, V>;
 
 export function createTranslationConfig<
   const Language extends string,
   const Default extends Language,
-  const Ordinals extends
-    | Record<Language, OrdinalVariants>
-    | undefined = undefined,
->(config: TranslationConfig<Language, Default, Ordinals>) {
+  const Config extends Record<Language, unknown> = Record<Language, unknown>,
+>(config: TranslationConfig<Language, Default, Config>) {
   const languages = new Set<string>(config.languages);
 
   function isConfiguredLanguage(language: string): language is Language {
     return languages.has(language);
   }
 
-  return <const T extends TranslationDict<Language>>(
-    translations: T & ValidateDict<T, Default, HasOrdinals<Ordinals>>,
-  ): Translator<T, Language, Default> =>
+  const define =
+    <const T extends TranslationDict<Language>>(
+      translations: T & ValidateDict<T, Default>,
+    ): Translator<T, Language, Default> =>
     <Locale extends Language>(locale: Locale) => {
       const resolve = (key: PropertyKey) => {
         const entry: Record<Language, TranslationValue> | undefined =
           translations[key as keyof T];
-        /**
-         * A template, string, todo(), or ref()
-         */
         let translationDefinition = entry?.[locale];
 
         if (isRef(translationDefinition)) {
@@ -84,9 +75,9 @@ export function createTranslationConfig<
 
         if (isMsg(translationDefinition)) {
           const template = translationDefinition;
-          const ordinals = config.ordinals?.[locale];
+          const cfg = config.configs?.[locale];
 
-          return (dict: never) => template(dict, locale, ordinals);
+          return (dict: never) => template(dict, locale, cfg);
         }
 
         throw new Error(
@@ -94,7 +85,6 @@ export function createTranslationConfig<
         );
       };
 
-      // hide away unsafe assertion in this lib, programmatic populations of objects are tricky
       const result = {} as {
         [K in keyof T]: ResolveValue<T[K], T[K][Locale], Default>;
       };
@@ -120,11 +110,11 @@ export function createTranslationConfig<
 
       return result;
     };
+
+  return { define, tool: bareTool as unknown as VendedTool<Language, Config> };
 }
 
 export { type Msg, msg } from "./msg";
-export { num } from "./num";
-export { type OrdinalVariants, ordinal } from "./ordinal";
-export { plural } from "./plural";
 export { type Ref, ref, type TodoRef, todo } from "./ref";
+export type { ToolKey } from "./tool";
 export type { Translation, Translator } from "./types";

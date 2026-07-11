@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createTranslationConfig, msg } from ".";
 
-describe(createTranslationConfig.name, () => {
-  const define = createTranslationConfig({
+describe("createTranslationConfig", () => {
+  const { define } = createTranslationConfig({
     languages: ["en", "jp"],
     default: "en",
   });
@@ -36,8 +36,8 @@ describe(createTranslationConfig.name, () => {
   });
 });
 
-describe("translator proxy traps", () => {
-  const define = createTranslationConfig({
+describe("translator object behavior", () => {
+  const { define } = createTranslationConfig({
     languages: ["en", "jp"],
     default: "en",
   });

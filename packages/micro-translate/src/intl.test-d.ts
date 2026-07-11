@@ -7,7 +7,8 @@
  * passing the type-check is the test passing.
  */
 import { expectTypeOf } from "expect-type";
-import { createTranslationConfig, msg, num } from ".";
+import { msg } from ".";
+import { num, plural } from "./intl";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
 // still type-checks them, which is the entire point of this file.
@@ -21,22 +22,35 @@ describe("num", () => {
     expectTypeOf(available).parameter(0).toEqualTypeOf<{ count: number }>();
   });
 
-  it("resolves to a clean template function and needs no config", () => {
-    const define = createTranslationConfig({
-      languages: ["en"],
-      default: "en",
-    });
-    const t = define({ stock: { en: msg`${num("count")} left` } });
-
-    expectTypeOf(t("en").stock).toEqualTypeOf<
-      (dict: { count: number }) => string
-    >();
-  });
-
   it("rejects a non-number argument", () => {
-    const available = msg`There are ${num("count")} available`;
+    const available = msg`${num("count")}`;
 
     // @ts-expect-error - `count` must be a number.
     available({ count: "lots" });
+  });
+});
+
+describe("plural", () => {
+  it("infers a number parameter under its name", () => {
+    const count = msg`${plural("count", { one: "file", other: "files" })}`;
+
+    expectTypeOf(count).parameter(0).toEqualTypeOf<{ count: number }>();
+  });
+
+  it("requires the `other` variant", () => {
+    // @ts-expect-error - `other` is the mandatory fallback variant.
+    plural("count", { one: "file" });
+  });
+
+  it("only allows valid CLDR plural categories", () => {
+    // @ts-expect-error - `lots` is not a plural category.
+    plural("count", { other: "files", lots: "many" });
+  });
+
+  it("rejects a non-number argument", () => {
+    const count = msg`${plural("count", { one: "file", other: "files" })}`;
+
+    // @ts-expect-error - `count` must be a number.
+    count({ count: "many" });
   });
 });

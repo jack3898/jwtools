@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationConfig, msg, plural, ref, todo } from ".";
+import { createTranslationConfig, msg, ref, todo } from ".";
+import { plural } from "./intl";
 
-describe(ref.name, () => {
-  const define = createTranslationConfig({
+describe("ref", () => {
+  const { define } = createTranslationConfig({
     languages: ["en", "en-gb", "fr"],
     default: "en",
   });
@@ -85,8 +86,8 @@ describe(ref.name, () => {
   });
 });
 
-describe(todo.name, () => {
-  const define = createTranslationConfig({
+describe("todo", () => {
+  const { define } = createTranslationConfig({
     languages: ["en", "en-gb", "fr"],
     default: "en",
   });

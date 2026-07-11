@@ -15,7 +15,7 @@ const describe = (_name: string, fn: () => void): void => void fn;
 const it = (_name: string, fn: () => void): void => void fn;
 
 describe("createTranslationConfig", () => {
-  const define = createTranslationConfig({
+  const { define } = createTranslationConfig({
     languages: ["en", "jp"],
     default: "en",
   });

@@ -1,12 +1,12 @@
 import {
   createTranslationConfig,
   msg,
-  plural,
   ref,
   todo,
 } from "@jack3898/micro-translate";
+import { plural } from "@jack3898/micro-translate/intl";
 
-const defineTranslations = createTranslationConfig({
+const { define: defineTranslations } = createTranslationConfig({
   languages: ["en", "ar", "gg"],
   default: "en",
 });
