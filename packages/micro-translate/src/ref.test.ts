@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTranslationConfig, msg, ref, todo } from ".";
-import { plural } from "./intl";
+import { plural } from "./intl/plural";
 
 describe("ref", () => {
   const { define } = createTranslationConfig({

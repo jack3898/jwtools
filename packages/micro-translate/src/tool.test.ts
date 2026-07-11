@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTranslationConfig, msg, ref } from ".";
-import type { PluralRule } from "./intl";
+import type { PluralRule } from "./intl/plural";
 
 type OrdinalTable = Partial<Record<PluralRule, string>> & { other: string };
 

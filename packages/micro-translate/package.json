@@ -28,14 +28,31 @@
       }
     }
   },
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./intl": {
-      "types": "./dist/intl.d.ts",
-      "import": "./dist/intl.js"
+    "./intl/num": {
+      "types": "./dist/intl/num.d.ts",
+      "import": "./dist/intl/num.js"
+    },
+    "./intl/plural": {
+      "types": "./dist/intl/plural.d.ts",
+      "import": "./dist/intl/plural.js"
+    },
+    "./intl/date": {
+      "types": "./dist/intl/date.d.ts",
+      "import": "./dist/intl/date.js"
+    },
+    "./intl/list": {
+      "types": "./dist/intl/list.d.ts",
+      "import": "./dist/intl/list.js"
+    },
+    "./intl/relative-time": {
+      "types": "./dist/intl/relative-time.d.ts",
+      "import": "./dist/intl/relative-time.js"
     }
   },
   "devDependencies": {

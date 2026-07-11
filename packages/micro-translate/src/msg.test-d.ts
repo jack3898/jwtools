@@ -8,7 +8,7 @@
  */
 import { expectTypeOf } from "expect-type";
 import { msg } from ".";
-import { plural } from "./intl";
+import { plural } from "./intl/plural";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
 // still type-checks them, which is the entire point of this file.

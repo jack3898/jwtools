@@ -4,7 +4,8 @@ import {
   ref,
   todo,
 } from "@jack3898/micro-translate";
-import { plural } from "@jack3898/micro-translate/intl";
+import { num } from "@jack3898/micro-translate/intl/num";
+import { plural } from "@jack3898/micro-translate/intl/plural";
 
 const { define: defineTranslations } = createTranslationConfig({
   languages: {
@@ -67,14 +68,14 @@ const aliased = defineTranslations({
     gg: ref("en"),
   },
   welcome: {
-    en: msg`Hey ${"name"}`,
+    en: msg`Hey ${"name"} your age is ${num("age")}`,
     gg: msg`Ok`,
     ar: todo(), // not translated yet -> falls back to "en"
   },
 });
 
 console.log(aliased("ar").submit); // "Submit"
-console.log(aliased("ar").welcome({ name: "world" })); // "Hey World" (fallback)
+console.log(aliased("ar").welcome({ name: "world", age: 50000 })); // "Hey World" (fallback)
 
 // utility approach
 
