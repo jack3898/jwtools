@@ -7,7 +7,7 @@ type OrdinalTable = Partial<Record<PluralRule, string>> & { other: string };
 describe("tool", () => {
   it("formats a value-only recipe", () => {
     const { define, tool } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const shout = (name: string) => tool(name, (v: string) => v.toUpperCase());
@@ -18,7 +18,7 @@ describe("tool", () => {
 
   it("formats a value+locale recipe", () => {
     const { define, tool } = createTranslationConfig({
-      languages: ["en", "de"],
+      languages: { en: {}, de: {} },
       default: "en",
     });
     const money = (name: string) =>
@@ -36,15 +36,14 @@ describe("tool", () => {
   });
 
   it("formats a value+locale+config recipe reading per-language config", () => {
-    const configs: Record<"en" | "ja" | "fr", { ordinal: OrdinalTable }> = {
+    const languages: Record<"en" | "ja" | "fr", { ordinal: OrdinalTable }> = {
       en: { ordinal: { one: "st", two: "nd", few: "rd", other: "th" } },
       ja: { ordinal: { other: "番目" } },
       fr: { ordinal: { one: "er", other: "e" } },
     };
     const { define, tool } = createTranslationConfig({
-      languages: ["en", "ja", "fr"],
+      languages,
       default: "en",
-      configs,
     });
     const ordinal = (name: string) =>
       tool(name, (value: number, locale, config) => {
@@ -69,13 +68,12 @@ describe("tool", () => {
   });
 
   it("falls back to `other` when the selected category is missing", () => {
-    const configs: Record<"en", { ordinal: OrdinalTable }> = {
+    const languages: Record<"en", { ordinal: OrdinalTable }> = {
       en: { ordinal: { other: "th" } },
     };
     const { define, tool } = createTranslationConfig({
-      languages: ["en"],
+      languages,
       default: "en",
-      configs,
     });
     const ordinal = (name: string) =>
       tool(name, (value: number, locale, config) => {
@@ -91,14 +89,13 @@ describe("tool", () => {
   });
 
   it("runs a ref'd recipe under the caller's config, not the target's", () => {
-    const configs: Record<"en" | "ja", { ordinal: OrdinalTable }> = {
+    const languages: Record<"en" | "ja", { ordinal: OrdinalTable }> = {
       en: { ordinal: { one: "st", two: "nd", few: "rd", other: "th" } },
       ja: { ordinal: { other: "番目" } },
     };
     const { define, tool } = createTranslationConfig({
-      languages: ["en", "ja"],
+      languages,
       default: "en",
-      configs,
     });
     const ordinal = (name: string) =>
       tool(name, (value: number, locale, config) => {

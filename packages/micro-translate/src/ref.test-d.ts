@@ -16,7 +16,7 @@ const it = (_name: string, fn: () => void): void => void fn;
 
 describe("ref", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "en-gb", "fr"],
+    languages: { en: {}, "en-gb": {}, fr: {} },
     default: "en",
   });
 
@@ -69,7 +69,7 @@ describe("ref", () => {
 
 describe("todo", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "en-gb", "fr"],
+    languages: { en: {}, "en-gb": {}, fr: {} },
     default: "en",
   });
 

@@ -21,7 +21,7 @@ const it = (_name: string, fn: () => void): void => void fn;
 
 describe("Translator", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "jp"],
+    languages: { en: {}, jp: {} },
     default: "en",
   });
   const t = define({ submit: { en: "Submit", jp: "Submitto" } });
@@ -48,7 +48,7 @@ describe("Translator", () => {
 
 describe("Translation", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "jp"],
+    languages: { en: {}, jp: {} },
     default: "en",
   });
   const translator = define({

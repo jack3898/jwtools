@@ -16,7 +16,7 @@ const it = (_name: string, fn: () => void): void => void fn;
 
 describe("createTranslationConfig", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "jp"],
+    languages: { en: {}, jp: {} },
     default: "en",
   });
   const t = define({
@@ -78,13 +78,13 @@ describe("createTranslationConfig", () => {
 describe("config default", () => {
   it("requires `default` to be provided", () => {
     // @ts-expect-error - `default` is required.
-    createTranslationConfig({ languages: ["en", "jp"] });
+    createTranslationConfig({ languages: { en: {}, jp: {} } });
   });
 
   it("requires `default` to be a declared language", () => {
-    createTranslationConfig({ languages: ["en", "jp"], default: "en" });
+    createTranslationConfig({ languages: { en: {}, jp: {} }, default: "en" });
 
     // @ts-expect-error - "fr" is not one of the declared languages.
-    createTranslationConfig({ languages: ["en", "jp"], default: "fr" });
+    createTranslationConfig({ languages: { en: {}, jp: {} }, default: "fr" });
   });
 });

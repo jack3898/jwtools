@@ -17,7 +17,7 @@ const it = (_name: string, fn: () => void): void => void fn;
 describe("tool", () => {
   it("infers V from the callback value annotation and preserves the key", () => {
     const { tool } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const place = tool("place", (v: number) => String(v));
@@ -28,7 +28,7 @@ describe("tool", () => {
 
   it("infers V as string, Date, string[] and object payloads", () => {
     const { tool } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const s = tool("a", (v: string) => v);
@@ -44,7 +44,7 @@ describe("tool", () => {
 
   it("supports progressive callback arity", () => {
     const { tool } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
 
@@ -54,13 +54,12 @@ describe("tool", () => {
   });
 
   it("types config as the per-language config inside the callback", () => {
-    const configs: Record<"en", { ordinal: { other: string } }> = {
+    const languages: Record<"en", { ordinal: { other: string } }> = {
       en: { ordinal: { other: "th" } },
     };
     const { tool } = createTranslationConfig({
-      languages: ["en"],
+      languages,
       default: "en",
-      configs,
     });
 
     tool("place", (v: number, _locale, config) => {
@@ -71,14 +70,13 @@ describe("tool", () => {
   });
 
   it("types config as the union of slices when languages differ in shape", () => {
-    const configs: { en: { suffix: string }; ja: { counter: string } } = {
+    const languages: { en: { suffix: string }; ja: { counter: string } } = {
       en: { suffix: "th" },
       ja: { counter: "番目" },
     };
     const { tool } = createTranslationConfig({
-      languages: ["en", "ja"],
+      languages,
       default: "en",
-      configs,
     });
 
     tool("place", (v: number, _locale, config) => {
@@ -92,7 +90,7 @@ describe("tool", () => {
 
   it("rejects a wrong-typed value at the call site", () => {
     const { tool } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const stamp = msg`${tool("at", (v: Date) => v.toISOString())}`;
@@ -103,7 +101,7 @@ describe("tool", () => {
 
   it("resolves a tool-bearing template to its parameterised function", () => {
     const { define, tool } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const t = define({

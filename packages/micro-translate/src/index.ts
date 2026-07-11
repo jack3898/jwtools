@@ -9,43 +9,49 @@ import type {
   ValidateDict,
 } from "./types";
 
+type LanguageOf<Languages> = keyof Languages & string;
+
 type TranslationConfig<
-  Language extends string,
-  Default extends Language,
-  Config,
+  Languages extends Record<string, unknown>,
+  Default extends keyof Languages & string,
 > = {
-  languages: Language[];
+  languages: Languages;
   default: Default;
-  configs?: Config;
 };
 
-type VendedTool<
-  Language extends string,
-  Config extends Record<Language, unknown>,
-> = <const Name extends string, V>(
+type VendedTool<Languages extends Record<string, unknown>> = <
+  const Name extends string,
+  V,
+>(
   name: Name,
-  format: (value: V, locale: Language, config: Config[Language]) => string,
+  format: (
+    value: V,
+    locale: LanguageOf<Languages>,
+    config: Languages[LanguageOf<Languages>],
+  ) => string,
 ) => ToolKey<Name, V>;
 
 export function createTranslationConfig<
-  const Language extends string,
-  const Default extends Language,
-  const Config extends Record<Language, unknown> = Record<Language, unknown>,
->(config: TranslationConfig<Language, Default, Config>) {
-  const languages = new Set<string>(config.languages);
+  const Languages extends Record<string, unknown>,
+  const Default extends keyof Languages & string,
+>(config: TranslationConfig<Languages, Default>) {
+  const languages = new Set<string>(Object.keys(config.languages));
 
-  function isConfiguredLanguage(language: string): language is Language {
+  function isConfiguredLanguage(
+    language: string,
+  ): language is LanguageOf<Languages> {
     return languages.has(language);
   }
 
   const define =
-    <const T extends TranslationDict<Language>>(
+    <const T extends TranslationDict<LanguageOf<Languages>>>(
       translations: T & ValidateDict<T, Default>,
-    ): Translator<T, Language, Default> =>
-    <Locale extends Language>(locale: Locale) => {
+    ): Translator<T, LanguageOf<Languages>, Default> =>
+    <Locale extends LanguageOf<Languages>>(locale: Locale) => {
       const resolve = (key: PropertyKey) => {
-        const entry: Record<Language, TranslationValue> | undefined =
-          translations[key as keyof T];
+        const entry:
+          | Record<LanguageOf<Languages>, TranslationValue>
+          | undefined = translations[key as keyof T];
         let translationDefinition = entry?.[locale];
 
         if (isRef(translationDefinition)) {
@@ -75,7 +81,7 @@ export function createTranslationConfig<
 
         if (isMsg(translationDefinition)) {
           const template = translationDefinition;
-          const cfg = config.configs?.[locale];
+          const cfg = config.languages[locale];
 
           return (dict: never) => template(dict, locale, cfg);
         }
@@ -111,7 +117,7 @@ export function createTranslationConfig<
       return result;
     };
 
-  return { define, tool: bareTool as unknown as VendedTool<Language, Config> };
+  return { define, tool: bareTool as unknown as VendedTool<Languages> };
 }
 
 export { type Msg, msg } from "./msg";

@@ -4,7 +4,7 @@ import { plural } from "./intl";
 
 describe("ref", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "en-gb", "fr"],
+    languages: { en: {}, "en-gb": {}, fr: {} },
     default: "en",
   });
 
@@ -88,7 +88,7 @@ describe("ref", () => {
 
 describe("todo", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "en-gb", "fr"],
+    languages: { en: {}, "en-gb": {}, fr: {} },
     default: "en",
   });
 

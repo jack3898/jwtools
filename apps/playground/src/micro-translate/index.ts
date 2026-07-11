@@ -7,7 +7,17 @@ import {
 import { plural } from "@jack3898/micro-translate/intl";
 
 const { define: defineTranslations } = createTranslationConfig({
-  languages: ["en", "ar", "gg"],
+  languages: {
+    en: {
+      ordinals: [],
+    },
+    ar: {
+      ordinals: [],
+    },
+    gg: {
+      ordinals: [],
+    },
+  },
   default: "en",
 });
 

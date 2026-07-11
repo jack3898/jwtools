@@ -3,7 +3,7 @@ import { createTranslationConfig, msg } from ".";
 
 describe("createTranslationConfig", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "jp"],
+    languages: { en: {}, jp: {} },
     default: "en",
   });
   const t = define({
@@ -38,7 +38,7 @@ describe("createTranslationConfig", () => {
 
 describe("translator object behavior", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "jp"],
+    languages: { en: {}, jp: {} },
     default: "en",
   });
   const translator = define({

@@ -4,7 +4,7 @@ import { num, plural } from "./intl";
 
 describe("num", () => {
   const { define } = createTranslationConfig({
-    languages: ["en", "de"],
+    languages: { en: {}, de: {} },
     default: "en",
   });
 
@@ -41,7 +41,7 @@ describe("num", () => {
 describe("plural", () => {
   it("is selected for the active locale via the translator", () => {
     const { define } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const t = define({
@@ -57,7 +57,7 @@ describe("plural", () => {
 
   it("uses each locale's own plural rules", () => {
     const { define } = createTranslationConfig({
-      languages: ["en", "ar"],
+      languages: { en: {}, ar: {} },
       default: "en",
     });
     const t = define({
@@ -86,7 +86,7 @@ describe("plural", () => {
 
   it("falls back to `other` when the selected category is missing", () => {
     const { define } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const t = define({
@@ -101,7 +101,7 @@ describe("plural", () => {
 
   it("combines a named parameter with a plural", () => {
     const { define } = createTranslationConfig({
-      languages: ["en"],
+      languages: { en: {} },
       default: "en",
     });
     const t = define({
