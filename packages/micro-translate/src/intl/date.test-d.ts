@@ -1,7 +1,7 @@
 /**
  * Type-level tests for the public type surface.
  *
- * These are not run by Vitest — they are verified by `tsc --noEmit` (the
+ * These are not run by Vitest; they are verified by `tsc --noEmit` (the
  * `type-check` target). A failing assertion is a compile error, and a
  * `@ts-expect-error` that *doesn't* error is also a compile error, so the file
  * passing the type-check is the test passing.

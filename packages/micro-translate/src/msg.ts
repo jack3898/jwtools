@@ -2,6 +2,10 @@ import { isToolKey, type ToolKey } from "./tool";
 
 const msgBrand = Symbol("micro-translate/msg");
 
+/**
+ * The branded template function produced by {@link msg}. You rarely name this
+ * directly. It's what a `msg` interpolation resolves to inside a translation.
+ */
 export type Msg = ((dict: never, locale?: string) => string) & {
   [msgBrand]: true;
 };
@@ -44,6 +48,19 @@ export function isMsg(value: unknown): value is Msg {
   return typeof value === "function" && msgBrand in value;
 }
 
+/**
+ * A tagged template for translations with named, type-inferred parameters.
+ *
+ * Interpolate a string literal for a plain named parameter, or a formatter key
+ * from a recipe like {@link plural}/{@link num}/{@link tool}. The parameter names
+ * and types are inferred from what you interpolate and become the argument to the
+ * resolved template function.
+ *
+ * @example ```ts
+ * const greet = msg`Hey ${"name"}`;
+ * greet({ name: "Ada" }); // "Hey Ada", infers { name: string | number }
+ * ```
+ */
 export function msg<const Keys extends readonly TemplateKey[]>(
   strings: TemplateStringsArray,
   ...keys: Keys

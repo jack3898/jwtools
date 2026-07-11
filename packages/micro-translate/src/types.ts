@@ -10,6 +10,22 @@ export type TranslationDict<Language extends string = string> = Record<
   Record<Language, TranslationValue>
 >;
 
+/**
+ * The function returned by `define(...)`. Give it the active locale and it
+ * resolves every key to that locale's value.
+ *
+ * Use it to type a value that holds a translator: a prop, a context value, or a
+ * `useTranslation` wrapper. Pin your locale union and infer the resolved
+ * translations to keep the keys without a type assertion.
+ *
+ * @example ```ts
+ * type Locale = "en" | "ja";
+ *
+ * function useTranslation<T>(translator: (locale: Locale) => T): T {
+ *   return translator(getUserLocale()); // your locale source
+ * }
+ * ```
+ */
 export type Translator<
   T extends TranslationDict = TranslationDict,
   Language extends string = string,
@@ -48,4 +64,14 @@ type ValidateValue<Entry, V, Default extends string> = V extends TodoRef
       : `❌ ref("${Target & string}") target does not exist`
     : V;
 
+/**
+ * The resolved translations a {@link Translator} produces: every key mapped to
+ * its value across the supported locales.
+ *
+ * @example ```ts
+ * const translator = define({ submit: { en: "Submit", ja: "Submitto" } });
+ *
+ * type T = Translation<typeof translator>; // { submit: "Submit" | "Submitto" }
+ * ```
+ */
 export type Translation<T extends Translator> = ReturnType<T>;

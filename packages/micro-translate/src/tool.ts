@@ -1,5 +1,10 @@
 const toolBrand = Symbol("micro-translate/tool");
 
+/**
+ * The formatter key produced by a {@link tool} recipe: carries the parameter
+ * `name` and, via `V`, the type its value must be at the call site. Interpolate
+ * one into a {@link msg} template.
+ */
 export type ToolKey<Name extends string = string, V = unknown> = {
   [toolBrand]: true;
   name: Name;

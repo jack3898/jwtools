@@ -19,6 +19,25 @@ type TranslationConfig<
   default: Default;
 };
 
+/**
+ * Creates a translator factory bound to your languages and their per-language
+ * config. Keep this in a central `i18n.ts` and import `define`/`tool` from there.
+ *
+ * Each key of `languages` is a supported language; its value is that language's
+ * config: arbitrary data your {@link tool} recipes can read (use `{}` when a
+ * language needs none). `default` must be one of those languages and is the
+ * locale {@link todo} falls back to.
+ *
+ * @returns `{ define, tool }`, both bound to this config.
+ *
+ * @example ```ts
+ * // i18n.ts
+ * export const { define, tool } = createTranslationConfig({
+ *   languages: { en: {}, ja: {} },
+ *   default: "en",
+ * });
+ * ```
+ */
 export function createTranslationConfig<
   const Languages extends Record<string, unknown>,
   const Default extends keyof Languages & string,
@@ -35,6 +54,24 @@ export function createTranslationConfig<
     locale: Locale,
   ): Languages[Locale] => config.languages[locale];
 
+  /**
+   * Builds a custom formatter (a "recipe"). It's the primitive every formatter is
+   * made of: {@link num}, {@link plural}, {@link date} and friends are all `tool`
+   * recipes.
+   *
+   * The type you annotate on the callback's `value` becomes the call-site
+   * parameter type for `name`. The callback also receives the active `locale` and
+   * this config's per-language `config` slice; take only what you need.
+   *
+   * @param name The template parameter name this formatter reads.
+   * @param format Turns the value (plus locale and config) into a string.
+   *
+   * @example ```ts
+   * // beside your config, in i18n.ts
+   * const shout = (name: string) => tool(name, (value: string) => value.toUpperCase());
+   * // msg`${shout("word")}` -> requires { word: string }
+   * ```
+   */
   const tool = <const Name extends string, V>(
     name: Name,
     format: (
@@ -53,6 +90,23 @@ export function createTranslationConfig<
       return format(value, locale, configOf(locale));
     });
 
+  /**
+   * Declares a set of translations and returns a `translator`.
+   *
+   * Pass a dictionary of keys, each mapping every configured language to a
+   * string, a {@link msg} template, or a {@link ref}/{@link todo} marker. Call the
+   * returned translator with a locale to get an object of resolved values.
+   *
+   * @example ```ts
+   * const translator = define({
+   *   submit: { en: "Submit", ja: "Submitto" },
+   *   welcome: { en: msg`Hey ${"name"}`, ja: msg`Konnichiwa ${"name"}` },
+   * });
+   *
+   * translator("en").submit; // "Submit"
+   * translator("en").welcome({ name: "Jack" }); // "Hey Jack"
+   * ```
+   */
   const define =
     <const T extends TranslationDict<LanguageOf<Languages>>>(
       translations: T & ValidateDict<T, Default>,
