@@ -2,11 +2,7 @@ import { isToolKey, type ToolKey } from "./tool";
 
 const msgBrand = Symbol("micro-translate/msg");
 
-export type Msg = ((
-  dict: never,
-  locale?: string,
-  config?: unknown,
-) => string) & {
+export type Msg = ((dict: never, locale?: string) => string) & {
   [msgBrand]: true;
 };
 
@@ -52,18 +48,14 @@ export function msg<const Keys extends readonly TemplateKey[]>(
   strings: TemplateStringsArray,
   ...keys: Keys
 ): MsgReturn<Keys> {
-  const render = (
-    dict: TemplateDict<Keys>,
-    locale?: string,
-    config?: unknown,
-  ): string => {
+  const render = (dict: TemplateDict<Keys>, locale?: string): string => {
     const values = dict as Record<PropertyKey, unknown>;
     const result = [strings[0]];
 
     for (const [i, key] of keys.entries()) {
       if (isToolKey(key)) {
         result.push(
-          key.format(values[key.name], locale, config),
+          key.format(values[key.name] as never, locale),
           strings[i + 1],
         );
 

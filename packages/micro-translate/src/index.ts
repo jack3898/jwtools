@@ -19,18 +19,6 @@ type TranslationConfig<
   default: Default;
 };
 
-type VendedTool<Languages extends Record<string, unknown>> = <
-  const Name extends string,
-  V,
->(
-  name: Name,
-  format: (
-    value: V,
-    locale: LanguageOf<Languages>,
-    config: Languages[LanguageOf<Languages>],
-  ) => string,
-) => ToolKey<Name, V>;
-
 export function createTranslationConfig<
   const Languages extends Record<string, unknown>,
   const Default extends keyof Languages & string,
@@ -42,6 +30,28 @@ export function createTranslationConfig<
   ): language is LanguageOf<Languages> {
     return languages.has(language);
   }
+
+  const configOf = <Locale extends keyof Languages>(
+    locale: Locale,
+  ): Languages[Locale] => config.languages[locale];
+
+  const tool = <const Name extends string, V>(
+    name: Name,
+    format: (
+      value: V,
+      locale: LanguageOf<Languages>,
+      config: Languages[LanguageOf<Languages>],
+    ) => string,
+  ): ToolKey<Name, V> =>
+    bareTool(name, (value: V, locale) => {
+      if (locale === undefined || !isConfiguredLanguage(locale)) {
+        throw new Error(
+          `❌ tool("${name}") must be rendered by a translator from the same createTranslationConfig`,
+        );
+      }
+
+      return format(value, locale, configOf(locale));
+    });
 
   const define =
     <const T extends TranslationDict<LanguageOf<Languages>>>(
@@ -81,9 +91,8 @@ export function createTranslationConfig<
 
         if (isMsg(translationDefinition)) {
           const template = translationDefinition;
-          const cfg = config.languages[locale];
 
-          return (dict: never) => template(dict, locale, cfg);
+          return (dict: never) => template(dict, locale);
         }
 
         throw new Error(
@@ -117,7 +126,7 @@ export function createTranslationConfig<
       return result;
     };
 
-  return { define, tool: bareTool as unknown as VendedTool<Languages> };
+  return { define, tool };
 }
 
 export { type Msg, msg } from "./msg";

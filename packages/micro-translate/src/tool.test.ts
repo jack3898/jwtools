@@ -16,6 +16,19 @@ describe("tool", () => {
     expect(t("en").greet({ word: "hi" })).toBe("HI!");
   });
 
+  it("throws when rendered outside its translation config", () => {
+    const { tool } = createTranslationConfig({
+      languages: { en: {} },
+      default: "en",
+    });
+    const shout = tool("word", (v: string) => v.toUpperCase());
+    const template = msg`${shout}!`;
+
+    expect(() => template({ word: "hi" })).toThrow(
+      '❌ tool("word") must be rendered by a translator from the same createTranslationConfig',
+    );
+  });
+
   it("formats a value+locale recipe", () => {
     const { define, tool } = createTranslationConfig({
       languages: { en: {}, de: {} },
