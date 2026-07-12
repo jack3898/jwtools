@@ -34,14 +34,13 @@ type FinalTemplateDict<Keys> = [Keys] extends [never]
           : NoParams
     >;
 
-type TemplateDict<Keys extends readonly TemplateKey[]> = {
-  [K in keyof FinalTemplateDict<Keys[number]>]: FinalTemplateDict<
-    Keys[number]
-  >[K];
-};
-
 type MsgReturn<Keys extends readonly TemplateKey[]> = (
-  dict: TemplateDict<Keys>,
+  dict: {
+    // I know it's ugly inlining it like this, but it keeps the consumer side type clean
+    [K in keyof FinalTemplateDict<Keys[number]>]: FinalTemplateDict<
+      Keys[number]
+    >[K];
+  },
 ) => string;
 
 export function isMsg(value: unknown): value is Msg {
@@ -65,7 +64,15 @@ export function msg<const Keys extends readonly TemplateKey[]>(
   strings: TemplateStringsArray,
   ...keys: Keys
 ): MsgReturn<Keys> {
-  const render = (dict: TemplateDict<Keys>, locale?: string): string => {
+  const render = (
+    // I know it's ugly inlining it like this, but it keeps the consumer side type clean
+    dict: {
+      [K in keyof FinalTemplateDict<Keys[number]>]: FinalTemplateDict<
+        Keys[number]
+      >[K];
+    },
+    locale?: string,
+  ): string => {
     const values = dict as Record<PropertyKey, unknown>;
     const result = [strings[0]];
 
