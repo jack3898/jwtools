@@ -1,7 +1,7 @@
 {
   "name": "@jack3898/micro-translate",
   "description": "A tiny TypeScript-first translation utility.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": "Jack Wright",
   "license": "Apache-2.0",
   "private": false,
