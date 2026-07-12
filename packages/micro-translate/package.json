@@ -28,7 +28,6 @@
       }
     }
   },
-  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -81,5 +80,6 @@
     "vanilla"
   ],
   "repository": "jack3898/jwtools.git",
+  "sideEffects": false,
   "types": "./dist/index.d.ts"
 }
