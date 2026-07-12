@@ -21,7 +21,7 @@ const { define, tool } = createTranslationConfig({
   },
 });
 
-const suffix = (name: string) => {
+const suffix = <const Name extends string>(name: Name) => {
   return tool(name, (_, __, config) => {
     if (config.distanceSystem === "IMPERIAL") {
       return "miles";

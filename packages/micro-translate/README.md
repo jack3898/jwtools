@@ -2,37 +2,17 @@
 
 Type-safe translations that don't fight your toolchain.
 
-Zero dependencies, fully type-inferred parameters, colocated translations, tree-shakeable, native Intl APIs.
+Zero dependencies, fully type-inferred parameters, colocated translations, tree-shakeable, native Intl APIs, extensible, no compile step.
 
 ## Installation
 
 ```sh
-npm install @jack3898/micro-translate
+pnpm install @jack3898/micro-translate
 ```
 
 ## Requirements
 
-This package uses native [`Intl`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) APIs. The core needs nothing; the presets wrap `Intl.NumberFormat`, `Intl.PluralRules`, `Intl.DateTimeFormat`, `Intl.ListFormat` and `Intl.RelativeTimeFormat` — available in Node 16+ and all modern browsers. It is distributed as ESM only (see [Note on module type](#note-on-module-type)).
-
-## API at a glance
-
-The library has one primitive: `tool()`, and everything else is built from it. Exports fall into three tiers:
-
-| Export                    | Import from                                    | Purpose                                                           |
-| ------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
-| `createTranslationConfig` | `@jack3898/micro-translate`                    | Declares your languages and default. Returns `{ define, tool }`.  |
-| `define`                  | your `i18n.ts` (from the call above)           | Declares your translations. The verb you build around.            |
-| `tool`                    | your `i18n.ts` (from the call above)           | The primitive every formatter is built from.                      |
-| `msg`                     | `@jack3898/micro-translate`                    | A template literal for translations with named parameters.        |
-| `ref`                     | `@jack3898/micro-translate`                    | Aliases one locale to another for character-for-character copies. |
-| `todo`                    | `@jack3898/micro-translate`                    | Stubs an untranslated entry, falling back to the default locale.  |
-| `num`                     | `@jack3898/micro-translate/intl/num`           | Formats a number using `Intl.NumberFormat`.                       |
-| `plural`                  | `@jack3898/micro-translate/intl/plural`        | Selects wording for a count using `Intl.PluralRules`.             |
-| `date`                    | `@jack3898/micro-translate/intl/date`          | Formats a date/time using `Intl.DateTimeFormat`.                  |
-| `list`                    | `@jack3898/micro-translate/intl/list`          | Joins a `string[]` using `Intl.ListFormat`.                       |
-| `relativeTime`            | `@jack3898/micro-translate/intl/relative-time` | Formats a relative time using `Intl.RelativeTimeFormat`.          |
-
-That's it!
+This package uses native [`Intl`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) APIs and by default are completely optional. The core needs nothing; the presets wrap `Intl.NumberFormat`, `Intl.PluralRules`, `Intl.DateTimeFormat`, `Intl.ListFormat` and `Intl.RelativeTimeFormat` - available in Node 16+ and all modern browsers. It is distributed as ESM only (see [Note on module type](#note-on-module-type)) and are imported on a different path that is separate to core.
 
 ## How to use it
 
@@ -50,11 +30,11 @@ export const { define, tool } = createTranslationConfig({
 });
 ```
 
-`default` is the locale [`todo()`](#incremental-rollout-with-todo) falls back to.
+`default` is the locale [`todo()`](#never-forget-a-translation-with-todo) falls back to.
 
 ### 2. Define your translations
 
-Then in your module, provide a value for every language in every key:
+Then in your module, provide a value for every language in every key. This library relies on template literals for magical string interpolation.
 
 ```tsx
 import { msg } from "@jack3898/micro-translate";
@@ -72,27 +52,31 @@ const translator = define({
 });
 ```
 
-You must provide a value for every language and a missing one is a compile error. (See [`todo()`](#incremental-rollout-with-todo) for partial rollouts.)
+You must provide a value for every language and a missing one is a compile error. (See [`todo()`](#never-forget-a-translation-with-todo) for partial rollouts.)
 
 ### 3. Use the translator
+
+After defining your translations, you can then fetch them. Translations that used tagged template strings must be called as a function, and requires parameters to be passed in.
 
 ```tsx
 const t = translator("en");
 
 console.log(t.submit); // "Submit"
 console.log(t.welcome({ name: "Jack" })); // "Hey Jack"
-console.log(t.welcome({ surname: "Surname" })); // ❌ "'surname' does not exist" / "'name' is missing"
+console.log(t.welcome({ surname: "Surname" })); // type error, surname does not exist
 ```
 
-The parameters are inferred fully from the `msg` template literal you defined.
+The parameters are magically inferred fully from the `msg` template literal you defined. If you change your template, then you need to update the object you pass at each call site, and TypeScript will point you at every call that no longer matches.
 
 ## Formatting with presets
 
-The presets are ready-made formatters that need no config — the locale alone drives them. Each lives at its **own** subpath under `/intl`, so you import (and bundle) only the ones you use:
+Tagged template strings get a whole lot more powerful when you introduce formatters. This supercharges the template strings and allows processing of values before they're injected into the final string. This covers things like number formatting, pluralization, lists and more. Best of all, using it is as easy as calling a simple function inside of the template string.
 
 ### Pluralization
 
-`plural` selects the right wording for a count using `Intl.PluralRules`. The parameter is a **number**, and `other` is the required fallback:
+`plural` selects the right wording for a count using runtime native `Intl.PluralRules`. This picks the right plural form, and also enforces that the value is a number when using the template.
+
+The template automatically passes the locale into `Intl.PluralRules` for you via the use of `translator("en")`. This means special cases like arabic, that have 6 plural forms, can be completely declared.
 
 ```ts
 import { msg } from "@jack3898/micro-translate";
@@ -111,18 +95,9 @@ t.fileCount({ count: 1 }); // "You have 1 file"
 t.fileCount({ count: 5 }); // "You have many files"
 ```
 
-The active locale flows automatically from `translator("en")` into the plural, so each language uses its own rules. Arabic, for instance, has six plural categories where English has two. Declare them per message. When a category is omitted, it falls back to `other`.
-
-You can mix plain text, named parameters and plurals in one template:
-
-```ts
-msg`${"name"} has ${plural("count", { one: "1 file", other: "many files" })}`;
-// call with { name: "Ada", count: 1 } -> "Ada has 1 file"
-```
-
 ### Number formatting
 
-`num` formats a number with `Intl.NumberFormat` like grouping separators, decimals, currency, percent, and so on:
+`num` formats a number with `Intl.NumberFormat` like grouping separators, decimals, currency, percent, and so on. This also enforces at the type level that the `count` must be provided as a number only:
 
 ```ts
 import { msg } from "@jack3898/micro-translate";
@@ -140,7 +115,7 @@ translator("en").available({ count: 1234567 }); // "There are 1,234,567 availabl
 translator("de").available({ count: 1234567 }); // "Es sind 1.234.567 verfügbar"
 ```
 
-Pass any [`Intl.NumberFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat#options) as the second argument for currency, percent, fixed decimals, etc.:
+And because it is a light wrapper over `Intl.NumberFormat` it can forward any [`Intl.NumberFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat#options) parameters for more control:
 
 ```ts
 const translator = define({
@@ -156,7 +131,7 @@ translator("de").price({ amount: 1234.5 }); // "1.234,50 €"
 
 ### Dates
 
-`date` formats a `Date` (or an epoch-millisecond number) with `Intl.DateTimeFormat`. Pass any [`Intl.DateTimeFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#options):
+`date` formats a `Date` (or an epoch-millisecond number) with `Intl.DateTimeFormat`. Pass any [`Intl.DateTimeFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#options). This one enforces that the values provided to the templates must be a valid Date instance or epoch millisecond number:
 
 ```ts
 import { msg } from "@jack3898/micro-translate";
@@ -176,7 +151,7 @@ translator("de").published({ on: new Date("2020-01-15") }); // "Veröffentlicht 
 
 ### Lists
 
-`list` joins a `string[]` with the locale's grammar using `Intl.ListFormat` like commas, the right conjunction, an Oxford comma where the locale uses one:
+`list` joins a `string[]` with the locale's grammar using `Intl.ListFormat` like commas, the right conjunction, an Oxford comma where the locale uses one. This one enforces that the values provided to the templates must be an array of strings.
 
 ```ts
 import { list } from "@jack3898/micro-translate/intl/list";
@@ -190,7 +165,7 @@ const translator = define({
 translator("en").invited({ names: ["Ada", "Grace", "Alan"] }); // "You invited Ada, Grace, and Alan"
 ```
 
-Pass `{ type: "disjunction" }` for "or" lists, `{ style: "short" }`, and so on.
+And as usual, it can forward the options. So you can pass `{ type: "disjunction" }` for "or" lists, `{ style: "short" }`, and so on.
 
 ### Relative time
 
@@ -209,65 +184,69 @@ translator("en").edited({ when: { value: -3, unit: "day" } }); // "Edited 3 days
 translator("en").edited({ when: { value: 2, unit: "hour" } }); // "Edited in 2 hours"
 ```
 
-Pass `{ numeric: "auto" }` to get "yesterday"/"tomorrow" where the locale has them. (Bundling multiple inputs into one parameter is a pattern you can reuse in your own recipes — see below.)
+Pass `{ numeric: "auto" }` to get "yesterday"/"tomorrow" where the locale has them. (Bundling multiple inputs into one parameter is a pattern you can reuse in your own recipes, see below.)
 
 ## Writing your own formatters with `tool()`
 
-All of the utilities you pass as parameters into your templates aren't special, they're `tool` recipes, and you can write your own to do whatever you like. A **recipe is just a function that returns `tool(...)`**. No registration, no plugin system. `tool()` is the backbone of formatting and can do almost anything.
+This is where the possibilities are almost limitless. This library is simply the composition of JavaScript functions. This means you can create your own bespoke library of formatting utilities that fit your use cases.
 
-While this library provides some useful tools out of the box, sometimes you need the extra power of your own custom ones allowing you to perform internationalization using external libraries.
+All of the above utilities seen so far aren't special, they're `tool` recipes pre-made for this library, and you can write your own to do whatever you like. A **recipe is just a function that returns `tool(...)`**.
 
-`tool(name, format)` takes a parameter name and a `format` callback. **The type you annotate on the callback's `value` becomes the call-site parameter type** for that name:
+### Basic API (custom "shout" formatting)
 
-```ts
-tool("place", (value: number) => String(value));
-// used in a template, this requires `{ place: number }`
-```
-
-The callback receives up to three arguments, and you take only what you need where config is inferred from your global config:
+This is one of the simplest examples. A formatter that makes values uppercase. The magic with `tool()` is that it has hidden away all of the typing complexities that you would have to manage on your own without it. This package is highly type-safe, so `tool()` was created to guide you down the right path.
 
 ```ts
-(value, locale, config) => string;
-```
+import { tool } from "./i18n"; // tool is returned from your `createTranslationConfig()`
 
-There are three tiers of recipe, by what they consume.
-
-### value only
-
-Ignore `locale` and `config`. This is the whole idea in one line:
-
-```ts
-import { tool } from "./i18n";
-
-const shout = (name: string) => {
+function shout<const Name extends string>(name: Name) {
   return tool(name, (value: string) => value.toUpperCase());
-};
+}
 
 // define({ hi: { en: msg`${shout("word")}!` } })
 // translator("en").hi({ word: "hey" }) -> "HEY!"
 ```
 
-### value + locale
+When you wrap `tool()` in a recipe, keep the name a literal type with `<const Name extends string>` rather than typing it as `string`. This ensures that the dictionary you pass in to the template has the correct keys. This library will reject using a custom tool without it so don't worry about forgetting this step.
 
-Most `Intl` wrappers. This is how the `num` preset is built (though you may want to cache the `new Intl.NumberFormat` construction):
+Notice `value: string` parameter in the function passed into `tool()`? That's actually doing a lot of heavy lifting as it's what provides the value type for the templates. E.g., the above custom tool will reject anything but a string:
 
 ```ts
-const money = (name: string) =>
-  tool(name, (value: number, locale) => {
+// ... your shout tool is defined in this module
+
+const translator = define({
+  shouted: {
+    en: msg`Edited ${shout("word")}`,
+  },
+});
+
+translator("en").shouted({ word: true }); // error: must be a string (as per `value: string` in the tool signature)
+```
+
+### Detect locale in your tool
+
+The callback receives up to three arguments, and you take only what you need where config is inferred from your global config. One of those is `locale`.
+
+For example, this is how the `num` preset is built (though you may want to cache the `new Intl.NumberFormat` construction):
+
+```ts
+function money<const Name extends string>(name: Name) {
+  return tool(name, (value: number, locale) => {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: "USD", // Your own mapping logic could go here depending on `locale`
     }).format(value);
   });
+}
 ```
 
-The active locale is handed to the callback by the translator.
+### Fetch translator config in your tool
 
-### value + locale + config
+Remember `createTranslationConfig`? Well, now it's come in extra handy! Think of `createTranslationConfig` as your repository of language-specific configs. You can retrieve these to supercharge your custom formatters.
 
-The capstone: formatters coupled to **per-language data**. Ordinals are the canonical example as the suffixes (`st`/`nd`/`rd`/`th`) are a property of the language, not of any one message, so you declare them once in your config and read them from `config`.
+Ordinals are the great example as the suffixes (`st`/`nd`/`rd`/`th`) are a property of the language, not of any one message, so you declare them once in your config and read them from `config`.
 
-Because `config` is entirely yours (see [Per-language config](#per-language-config)), define its shape and put your data in `languages`:
+Because `config` is entirely yours, and this library does not enforce a shape (see [Per-language config](#per-language-config)), define it and put your data in `languages`:
 
 ```ts
 // i18n.ts
@@ -287,8 +266,7 @@ export const { define, tool } = createTranslationConfig({
   default: "en",
 });
 
-// A config-coupled recipe — lives here, beside the config it reads.
-export const ordinal = (name: string) =>
+export const ordinal = <const Name extends string>(name: Name) =>
   tool(name, (value: number, locale, config) => {
     const category = new Intl.PluralRules(locale, { type: "ordinal" }).select(
       value,
@@ -311,11 +289,13 @@ translator("ja").finished({ place: 1 }); // "1番目"
 translator("fr").finished({ place: 1 }); // "Vous êtes 1er"
 ```
 
-This brings you closer to the browser's `Intl` API rather than hiding it behind a magic abstraction in the lib — you configured the suffixes anyway.
+The beauty with this system is that the type of `config` as used in the `tool()` is automatically inferred from your root `createTranslationConfig`. No need to manually type it.
+
+This brings you closer to the browser's `Intl` API rather than hiding it behind a magic abstraction in the lib. You configured the suffixes anyway.
 
 ### Per-language config
 
-The library owns only the outer keying: `languages` must be `{ [language]: yourConfig }`. **The shape of each value is entirely yours** be it a string, an object, nested maps, whatever your recipes need. The library never looks inside it and it's used for your own `tool()` recipes.
+The library owns only the outer keying: `languages` must be `{ [language]: yourConfig }`. **The shape of each value is entirely yours** be it a string, an object, nested maps, whatever your recipes need. The library never looks inside it and it's used strictly for your own `tool()` recipes.
 
 A few things worth knowing:
 
@@ -362,16 +342,18 @@ translator("en-au").colour; // "Colour"       (via en-gb)
 translator("en-us").colour; // "Color"        (its own value)
 ```
 
-`ref("en-gb")` adopts en-gb's **value** for this key — so its parameters match en-gb's. It runs under the **current** locale, exactly as if you'd pasted en-gb's template here yourself. A plain string forwards the string; a `msg` template forwards the same callable, and any formatters inside run under the **caller's** active locale and config.
+`ref("en-gb")` adopts `en-gb`'s value completely. It also forwards along all of the type safety you know and love.
 
-It's only for character-for-character identical translations — there's no override mechanism. If a locale diverges in any way (wording, order, formatting), write a fresh template instead. Two rules keep it safe, enforced at compile time **and** guarded at runtime:
+One caveat is that there's no override mechanism. If a locale diverges in any way (wording, order, formatting), write a fresh template instead. This was an intentional decision as it keeps things simple to reason about and explicit. Two rules keep it safe, enforced at compile time **and** guarded at runtime:
 
 1. The target must be another locale in the same key. `ref("fr")` where `fr` isn't a sibling is an error.
 2. The target must be a real value, never another `ref()`/`todo()`. This one-hop rule makes chains, cycles and self-reference structurally impossible.
 
-## Incremental rollout with `todo()`
+## Never forget a translation with `todo()`
 
-`todo()` stubs an entry you haven't translated yet. It's a thin wrapper over `ref()` that forwards to your configured `default`, so it resolves to the default locale's value and every `ref()` rule applies to it automatically:
+One of this library's top rules is that EVERYTHING must be translated and that any missing keys are a compile error. So, how does one introduce a new language incrementally?
+
+The answer is `todo()`. This is actually a thin wrapper over `ref()`, but differs in its semantics as it uses your **default language** as specified in your `createTranslationConfig`:
 
 ```ts
 import {
@@ -389,8 +371,8 @@ const { define } = createTranslationConfig({
 const translator = define({
   welcome: {
     "en-gb": msg`Hey ${"name"}`,
-    "en-us": ref("en-gb"), // permanent: identical to British English
-    "en-au": todo(), // stub: not localized yet, falls back to "en-gb"
+    "en-us": ref("en-gb"), // semantics imply permanent: identical to British English
+    "en-au": todo(), // semantics imply this is temporary: not localized yet, falls back to "en-gb"
   },
 });
 
@@ -399,14 +381,14 @@ translator("en-au").welcome({ name: "Jack" }); // "Hey Jack" (fallback)
 
 This gives you gap-free incremental localization:
 
-1. Add a new locale to `languages`. TypeScript errors on every key missing it — a complete worklist.
+1. Add a new locale to `languages`. TypeScript errors on every key missing it providing a complete worklist.
 2. Stub each one with `todo()`. The app compiles and ships; users get the default-locale fallback.
-3. Track the backlog with `grep -rn 'todo()' src/` — your exact list of what's left.
+3. Track the backlog with `grep -rn 'todo()' src/` which is your exact list of what's left.
 4. Replace each `todo()` with a real template at your own pace. Every step compiles and ships.
 
-## Wrapping the translator (e.g. a `useTranslation` hook in React)
+## Use in a framework/library: wrapping the translator (e.g. a `useTranslation` hook in React)
 
-Often you'll want to fetch the active locale once — from a context, a logged-in user, etc. — and hand back a ready-to-use translator:
+Often you'll want to fetch the active locale once like from a context, a logged-in user, etc. and hand back a ready-to-use translator:
 
 ```tsx
 type Locale = "en" | "ja"; // your app's locales
@@ -433,9 +415,13 @@ function MyComponent() {
 }
 ```
 
-## Embrace colocation!
+They key is that you simply need to provide a mechanism to feed the locale into the translator. If you can solve that, then you're golden. One downside is that each module or block requires you to reach into context of a user to fetch their locale - but that's a small price to pay.
+
+## Colocation - and why it's going to make your life much easier
 
 One major philosophical change this package introduces is defining translations per component or module. Where you need language, you have the translations right there for reference. This is a deliberate departure from convention that suits most applications.
+
+While it's encouraged to provide it in the same module _without an export_, I would say it reasonable to create a dedicated file next to your module if you want to keep it separate to your business logic. Just remember to never import one translator into multiple modules: don't be afraid to define the same translation twice or 10 times.
 
 The counterpoint is **setup**: your `createTranslationConfig`, the `define`/`tool` it vends, and any config-coupled recipes live in one central `i18n.ts`.
 

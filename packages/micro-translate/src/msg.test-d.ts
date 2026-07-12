@@ -59,6 +59,20 @@ describe("msg", () => {
     }>();
   });
 
+  it("rejects a parameter name widened to string", () => {
+    const name: string = "name";
+
+    // @ts-expect-error - parameter names must be string literals.
+    msg`Hey ${name}`;
+  });
+
+  it("rejects a parameter name typed as a template-literal pattern", () => {
+    const name: `a${string}` = "aName";
+
+    // @ts-expect-error - pattern names would melt the dict into an index signature.
+    msg`Hey ${name}`;
+  });
+
   it("rejects a missing parameter", () => {
     const greet = msg`Hey ${"name"}`;
 

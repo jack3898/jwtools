@@ -10,10 +10,31 @@ describe("tool", () => {
       languages: { en: {} },
       default: "en",
     });
-    const shout = (name: string) => tool(name, (v: string) => v.toUpperCase());
+    const shout = <const Name extends string>(name: Name) =>
+      tool(name, (v: string) => v.toUpperCase());
     const t = define({ greet: { en: msg`${shout("word")}!` } });
 
     expect(t("en").greet({ word: "hi" })).toBe("HI!");
+  });
+
+  it("formats a config-only recipe without a call-site value", () => {
+    const { define, tool } = createTranslationConfig({
+      languages: {
+        gb: { distanceSystem: "METRIC" },
+        us: { distanceSystem: "IMPERIAL" },
+      },
+      default: "gb",
+    });
+    const suffix = <const Name extends string>(name: Name) =>
+      tool(name, (_, __, config) =>
+        config.distanceSystem === "IMPERIAL" ? "miles" : "kilometers",
+      );
+    const t = define({
+      away: { gb: msg`${suffix("unit")} away`, us: ref("gb") },
+    });
+
+    expect(t("gb").away({})).toBe("kilometers away");
+    expect(t("us").away({})).toBe("miles away");
   });
 
   it("throws when rendered outside its translation config", () => {
@@ -34,7 +55,7 @@ describe("tool", () => {
       languages: { en: {}, de: {} },
       default: "en",
     });
-    const money = (name: string) =>
+    const money = <const Name extends string>(name: Name) =>
       tool(name, (v: number, locale) =>
         new Intl.NumberFormat(locale, {
           style: "currency",
@@ -58,7 +79,7 @@ describe("tool", () => {
       languages,
       default: "en",
     });
-    const ordinal = (name: string) =>
+    const ordinal = <const Name extends string>(name: Name) =>
       tool(name, (value: number, locale, config) => {
         const category = new Intl.PluralRules(locale, {
           type: "ordinal",
@@ -88,7 +109,7 @@ describe("tool", () => {
       languages,
       default: "en",
     });
-    const ordinal = (name: string) =>
+    const ordinal = <const Name extends string>(name: Name) =>
       tool(name, (value: number, locale, config) => {
         const category = new Intl.PluralRules(locale, {
           type: "ordinal",
@@ -110,7 +131,7 @@ describe("tool", () => {
       languages,
       default: "en",
     });
-    const ordinal = (name: string) =>
+    const ordinal = <const Name extends string>(name: Name) =>
       tool(name, (value: number, locale, config) => {
         const category = new Intl.PluralRules(locale, {
           type: "ordinal",

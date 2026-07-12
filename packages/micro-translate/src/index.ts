@@ -68,7 +68,8 @@ export function createTranslationConfig<
    *
    * @example ```ts
    * // beside your config, in i18n.ts
-   * const shout = (name: string) => tool(name, (value: string) => value.toUpperCase());
+   * const shout = <const Name extends string>(name: Name) =>
+   *   tool(name, (value: string) => value.toUpperCase());
    * // msg`${shout("word")}` -> requires { word: string }
    * ```
    */

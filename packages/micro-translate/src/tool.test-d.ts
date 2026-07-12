@@ -8,6 +8,7 @@
  */
 import { expectTypeOf } from "expect-type";
 import { createTranslationConfig, msg, type ToolKey } from ".";
+import { num } from "./intl/num";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
 // still type-checks them, which is the entire point of this file.
@@ -86,6 +87,57 @@ describe("tool", () => {
 
       return String(v);
     });
+  });
+
+  it("rejects a recipe whose name widened to string", () => {
+    const { tool } = createTranslationConfig({
+      languages: { en: {} },
+      default: "en",
+    });
+    const shout = (name: string) => tool(name, (v: string) => v.toUpperCase());
+
+    // @ts-expect-error - the wrapper widened the name to string.
+    msg`${shout("word")}`;
+  });
+
+  it("rejects a recipe whose name is a template-literal pattern", () => {
+    const { tool } = createTranslationConfig({
+      languages: { en: {} },
+      default: "en",
+    });
+    const field: `field_${string}` = "field_distance";
+    const patterned = tool(field, (v: number) => String(v));
+
+    // @ts-expect-error - pattern names would melt the dict into an index signature.
+    msg`${patterned}`;
+  });
+
+  it("makes the key optional when the recipe never types its value", () => {
+    const { tool } = createTranslationConfig({
+      languages: {
+        gb: { distanceSystem: "METRIC" },
+        us: { distanceSystem: "IMPERIAL" },
+      },
+      default: "gb",
+    });
+    const suffix = <const Name extends string>(name: Name) =>
+      tool(name, (_, __, config) =>
+        config.distanceSystem === "IMPERIAL" ? "miles" : "kilometers",
+      );
+
+    const template = msg`You're ${num("distance")} ${suffix("suffix")} away`;
+
+    // An exact object literal: no index signature, the value-less key optional.
+    expectTypeOf(template).parameter(0).toEqualTypeOf<{
+      distance: number;
+      suffix?: unknown;
+    }>();
+
+    template({ distance: 10 });
+    template({ distance: 10, suffix: "anything" });
+
+    // @ts-expect-error - keys not in the template are rejected.
+    template({ distance: 10, bogus: true });
   });
 
   it("rejects a wrong-typed value at the call site", () => {
