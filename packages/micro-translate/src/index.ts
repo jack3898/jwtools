@@ -9,7 +9,7 @@ import type {
   ValidateDict,
 } from "./types";
 
-type LanguageOf<Languages> = keyof Languages & string;
+type LooseRecordKeys<Languages> = keyof Languages & string;
 
 type TranslationConfig<
   Languages extends Record<string, unknown>,
@@ -39,20 +39,20 @@ type TranslationConfig<
  * ```
  */
 export function createTranslationConfig<
-  const Languages extends Record<string, unknown>,
-  const Default extends keyof Languages & string,
->(config: TranslationConfig<Languages, Default>) {
+  const LanguageConfigRecord extends Record<string, unknown>,
+  const DefaultLanguageString extends keyof LanguageConfigRecord & string,
+>(config: TranslationConfig<LanguageConfigRecord, DefaultLanguageString>) {
   const languages = new Set<string>(Object.keys(config.languages));
 
   function isConfiguredLanguage(
     language: string,
-  ): language is LanguageOf<Languages> {
+  ): language is LooseRecordKeys<LanguageConfigRecord> {
     return languages.has(language);
   }
 
-  const configOf = <Locale extends keyof Languages>(
+  const configOf = <Locale extends keyof LanguageConfigRecord>(
     locale: Locale,
-  ): Languages[Locale] => config.languages[locale];
+  ): LanguageConfigRecord[Locale] => config.languages[locale];
 
   /**
    * Builds a custom formatter (a "recipe"). It's the primitive every formatter is
@@ -77,8 +77,8 @@ export function createTranslationConfig<
     name: Name,
     format: (
       value: V,
-      locale: LanguageOf<Languages>,
-      config: Languages[LanguageOf<Languages>],
+      locale: LooseRecordKeys<LanguageConfigRecord>,
+      config: LanguageConfigRecord[LooseRecordKeys<LanguageConfigRecord>],
     ) => string,
   ): ToolKey<Name, V> =>
     bareTool(name, (value: V, locale) => {
@@ -109,13 +109,17 @@ export function createTranslationConfig<
    * ```
    */
   const define =
-    <const T extends TranslationDict<LanguageOf<Languages>>>(
-      translations: T & ValidateDict<T, Default>,
-    ): Translator<T, LanguageOf<Languages>, Default> =>
-    <Locale extends LanguageOf<Languages>>(locale: Locale) => {
+    <const T extends TranslationDict<LooseRecordKeys<LanguageConfigRecord>>>(
+      translations: T & ValidateDict<T, DefaultLanguageString>,
+    ): Translator<
+      T,
+      LooseRecordKeys<LanguageConfigRecord>,
+      DefaultLanguageString
+    > =>
+    <Locale extends LooseRecordKeys<LanguageConfigRecord>>(locale: Locale) => {
       const resolve = (key: PropertyKey) => {
         const entry:
-          | Record<LanguageOf<Languages>, TranslationValue>
+          | Record<LooseRecordKeys<LanguageConfigRecord>, TranslationValue>
           | undefined = translations[key as keyof T];
         let translationDefinition = entry?.[locale];
 
@@ -156,7 +160,7 @@ export function createTranslationConfig<
       };
 
       const result = {} as {
-        [K in keyof T]: ResolveValue<T[K], T[K][Locale], Default>;
+        [K in keyof T]: ResolveValue<T[K], T[K][Locale], DefaultLanguageString>;
       };
 
       for (const key of Object.keys(translations)) {

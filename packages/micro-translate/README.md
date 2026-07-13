@@ -234,7 +234,7 @@ function money<const Name extends string>(name: Name) {
   return tool(name, (value: number, locale) => {
     return new Intl.NumberFormat(locale, {
       style: "currency",
-      currency: "USD", // Your own mapping logic could go here depending on `locale`
+      currency: "USD",
     }).format(value);
   });
 }
@@ -253,16 +253,21 @@ Because `config` is entirely yours, and this library does not enforce a shape (s
 import { createTranslationConfig } from "@jack3898/micro-translate";
 import type { PluralRule } from "@jack3898/micro-translate/intl/plural";
 
-type OrdinalTable = Partial<Record<PluralRule, string>> & { other: string };
-
-const languages: Record<"en" | "ja" | "fr", { ordinal: OrdinalTable }> = {
-  en: { ordinal: { one: "st", two: "nd", few: "rd", other: "th" } },
-  ja: { ordinal: { other: "番目" } },
-  fr: { ordinal: { one: "er", other: "e" } },
-};
-
 export const { define, tool } = createTranslationConfig({
-  languages,
+  languages: {
+    en: {
+      ordinal: { one: "st", two: "nd", few: "rd", other: "th" },
+      currency: "GBP",
+    },
+    ja: {
+      ordinal: { other: "番目" },
+      currency: "JPY",
+    },
+    fr: {
+      ordinal: { one: "er", other: "e" },
+      currency: "EUR",
+    },
+  },
   default: "en",
 });
 
@@ -273,6 +278,19 @@ export const ordinal = <const Name extends string>(name: Name) =>
     );
     return `${value}${config.ordinal[category] ?? config.ordinal.other}`;
   });
+```
+
+Or even the money example from above! Now powered with the config:
+
+```ts
+function money<const Name extends string>(name: Name) {
+  return tool(name, (value: number, locale, { currency }) => {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+    }).format(value);
+  });
+}
 ```
 
 ```ts
