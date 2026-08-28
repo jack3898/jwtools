@@ -207,7 +207,7 @@ function shout<const Name extends string>(name: Name) {
 // translator("en").hi({ word: "hey" }) -> "HEY!"
 ```
 
-When you wrap `tool()` in a recipe, keep the name a literal type with `<const Name extends string>` rather than typing it as `string`. This ensures that the dictionary you pass in to the template has the correct keys. This library will reject using a custom tool without it so don't worry about forgetting this step.
+> ⚠️ The signature of tool() must use the generic `const Name extends string` as shown above. Otherwise your dictionary types will collapse and you will lose type safety.
 
 Notice `value: string` parameter in the function passed into `tool()`? That's actually doing a lot of heavy lifting as it's what provides the value type for the templates. E.g., the above custom tool will reject anything but a string:
 

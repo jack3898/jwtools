@@ -38,30 +38,6 @@ type FinalTemplateDict<Keys> = [Keys] extends [never]
           : NoParams
     >;
 
-// True when Name spans infinitely many keys (string, `a${string}`,
-// Uppercase<string>, ...), false for finite literal unions.
-type IsWidenedName<Name extends string> = NoParams extends Record<Name, unknown>
-  ? true
-  : false;
-
-type LiteralName<Key> =
-  Key extends ToolKey<infer Name, infer V>
-    ? IsWidenedName<Name> extends true
-      ? ToolKey<
-          "❌ tool name must be a string literal, declare recipes as <const Name extends string>(name: Name)",
-          V
-        >
-      : Key
-    : IsWidenedName<Key & string> extends true
-      ? "❌ msg parameter name must be a string literal"
-      : Key;
-
-// Widened names (plain `string` or a template-literal pattern) would melt the
-// dict into an index signature, so they are rejected at the template instead.
-type ValidateKeys<Keys extends readonly TemplateKey[]> = {
-  [I in keyof Keys]: LiteralName<Keys[I]>;
-};
-
 type MsgReturn<Keys extends readonly TemplateKey[]> = (
   dict: {
     // I know it's ugly inlining it like this, but it keeps the consumer side type clean
@@ -83,9 +59,11 @@ export function isMsg(value: unknown): value is Msg {
  * and types are inferred from what you interpolate and become the argument to the
  * resolved template function.
  *
- * The argument is an exact object literal: every name must be a string literal
- * type (a name widened to `string` is a compile error), and a recipe that never
- * types its value makes its parameter optional.
+ * The argument is an exact object literal, and a recipe that never types its
+ * value makes its parameter optional. Keep every interpolated name a string
+ * literal type: a name widened to `string` (e.g. a recipe missing
+ * `<const Name extends string>`) melts the dict into an index signature, and
+ * the keys are no longer checked.
  *
  * @example ```ts
  * const greet = msg`Hey ${"name"}`;
@@ -94,7 +72,7 @@ export function isMsg(value: unknown): value is Msg {
  */
 export function msg<const Keys extends readonly TemplateKey[]>(
   strings: TemplateStringsArray,
-  ...keys: Keys & ValidateKeys<Keys>
+  ...keys: Keys
 ): MsgReturn<Keys> {
   const templateKeys: readonly TemplateKey[] = keys;
 

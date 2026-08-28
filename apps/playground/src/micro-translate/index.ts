@@ -7,21 +7,32 @@ import {
 import { num } from "@jack3898/micro-translate/intl/num";
 
 const { define, tool } = createTranslationConfig({
-  default: "gb",
   languages: {
     gb: {
-      distanceSystem: "METRIC",
-    },
-    us: {
+      ordinal: { one: "st", two: "nd", few: "rd", other: "th" },
+      currency: "GBP",
       distanceSystem: "IMPERIAL",
     },
-    au: {
+    us: {
+      ordinal: { one: "st", two: "nd", few: "rd", other: "th" },
+      currency: "USD",
+      distanceSystem: "IMPERIAL",
+    },
+    ja: {
+      ordinal: { other: "番目" },
+      currency: "JPY",
+      distanceSystem: "METRIC",
+    },
+    fr: {
+      ordinal: { one: "er", other: "e" },
+      currency: "EUR",
       distanceSystem: "METRIC",
     },
   },
+  default: "gb",
 });
 
-const suffix = <const Name extends string>(name: Name) => {
+function suffix<const Name extends string>(name: Name) {
   return tool(name, (_, __, config) => {
     if (config.distanceSystem === "IMPERIAL") {
       return "miles";
@@ -29,20 +40,37 @@ const suffix = <const Name extends string>(name: Name) => {
 
     return "kilometers";
   });
-};
+}
+
+function money<const Name extends string>(name: Name) {
+  return tool(name, (value: number, locale, { currency }) => {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+    }).format(value);
+  });
+}
 
 const translator = define({
-  welcome: { gb: "Welcome!", us: ref("gb"), au: todo() },
-  carPark: { gb: "Car park", us: "Parking lot", au: todo() },
+  welcome: { gb: "Welcome!", us: ref("gb"), fr: todo(), ja: todo() },
+  carPark: { gb: "Car park", us: "Parking lot", fr: todo(), ja: todo() },
   complex: {
     gb: msg`You're ${num("distance")} ${suffix("suffix")} away`,
     us: ref("gb"),
-    au: todo(),
+    ja: todo(),
+    fr: todo(),
+  },
+  money: {
+    gb: msg`cost ${money("cost")}`,
+    fr: msg`cost ${money("cost")}`,
+    ja: msg`cost ${money("cost")}`,
+    us: msg`cost ${money("cost")}`,
   },
 });
 
-const t = translator("us");
+const t = translator("ja");
 
 console.log(t.welcome);
 console.log(t.carPark);
 console.log(t.complex({ distance: 10000 }));
+console.log(t.money({ cost: 1234 }));
