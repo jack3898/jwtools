@@ -6,11 +6,11 @@ const msgBrand = Symbol("micro-translate/msg");
  * The branded template function produced by {@link msg}. You rarely name this
  * directly. It's what a `msg` interpolation resolves to inside a translation.
  */
-export type Msg = ((dict: never, locale?: string) => string) & {
+export type Msg = ((dict: never, locale?: string) => unknown) & {
   [msgBrand]: true;
 };
 
-type TemplateKey = string | ToolKey;
+type TemplateKey = string | ToolKey<string, unknown, unknown>;
 
 type UnionToIntersection<U> = (
   U extends unknown
@@ -27,7 +27,7 @@ type NoParams = Record<never, never>;
 type FinalTemplateDict<Keys> = [Keys] extends [never]
   ? NoParams
   : UnionToIntersection<
-      Keys extends ToolKey<infer Name, infer V>
+      Keys extends ToolKey<infer Name, infer V, unknown>
         ? unknown extends V
           ? // A recipe that never types its value infers V as unknown, meaning it
             // doesn't consume the value, so the key is optional at the call site.
@@ -38,6 +38,18 @@ type FinalTemplateDict<Keys> = [Keys] extends [never]
           : NoParams
     >;
 
+type ToolOut<Keys> =
+  Keys extends ToolKey<string, unknown, infer Out> ? Out : never;
+
+// A template whose every interpolation renders to a string resolves to a plain
+// string. One non-string recipe output and it resolves to an array of chunks
+// (or a string, when every chunk still came out a string at runtime).
+type MsgOutput<Keys extends readonly TemplateKey[]> = [
+  Exclude<ToolOut<Keys[number]>, string>,
+] extends [never]
+  ? string
+  : string | (string | ToolOut<Keys[number]>)[];
+
 type MsgReturn<Keys extends readonly TemplateKey[]> = (
   dict: {
     // I know it's ugly inlining it like this, but it keeps the consumer side type clean
@@ -45,7 +57,7 @@ type MsgReturn<Keys extends readonly TemplateKey[]> = (
       Keys[number]
     >[K];
   },
-) => string;
+) => MsgOutput<Keys>;
 
 export function isMsg(value: unknown): value is Msg {
   return typeof value === "function" && msgBrand in value;
@@ -64,6 +76,12 @@ export function isMsg(value: unknown): value is Msg {
  * literal type: a name widened to `string` (e.g. a recipe missing
  * `<const Name extends string>`) melts the dict into an index signature, and
  * the keys are no longer checked.
+ *
+ * When every interpolation renders to a string the template resolves to a
+ * string. A recipe that renders to something else (a React element, say) makes
+ * the template resolve to an array of chunks instead, ready to hand to your
+ * framework's renderer; when every chunk still comes out a string at runtime,
+ * you get the joined string.
  *
  * @example ```ts
  * const greet = msg`Hey ${"name"}`;
@@ -84,16 +102,20 @@ export function msg<const Keys extends readonly TemplateKey[]>(
       >[K];
     },
     locale?: string,
-  ): string => {
+  ): unknown => {
     const values = dict as Record<PropertyKey, unknown>;
-    const result = [strings[0]];
+    const result: unknown[] = [strings[0]];
+    let allStrings = true;
 
     for (const [i, key] of templateKeys.entries()) {
       if (isToolKey(key)) {
-        result.push(
-          key.format(values[key.name] as never, locale),
-          strings[i + 1],
-        );
+        const formatted = key.format(values[key.name] as never, locale);
+
+        if (typeof formatted !== "string") {
+          allStrings = false;
+        }
+
+        result.push(formatted, strings[i + 1]);
 
         continue;
       }
@@ -101,7 +123,31 @@ export function msg<const Keys extends readonly TemplateKey[]>(
       result.push(String(values[key]), strings[i + 1]);
     }
 
-    return result.join("");
+    if (allStrings) {
+      return result.join("");
+    }
+
+    // Merge adjacent strings and drop empties so consumers get the fewest
+    // possible chunks.
+    const chunks: unknown[] = [];
+
+    for (const part of result) {
+      if (part === "") {
+        continue;
+      }
+
+      const last = chunks.at(-1);
+
+      if (typeof part === "string" && typeof last === "string") {
+        chunks[chunks.length - 1] = last + part;
+
+        continue;
+      }
+
+      chunks.push(part);
+    }
+
+    return chunks;
   };
 
   Object.assign(render, { [msgBrand]: true });

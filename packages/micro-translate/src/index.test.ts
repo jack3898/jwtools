@@ -109,3 +109,39 @@ describe("translator object behavior", () => {
     expect(asRecord.then).toBeUndefined();
   });
 });
+
+describe("rich tool output through define", () => {
+  type El = { type: string; children: string };
+
+  const { define, tool } = createTranslationConfig({
+    languages: {
+      en: { termsLabel: "the terms" },
+      jp: { termsLabel: "利用規約" },
+    },
+    default: "en",
+  });
+  const link = <const Name extends string>(name: Name) =>
+    tool(name, (render: (text: string) => El, _locale, config) =>
+      render(config.termsLabel),
+    );
+  const t = define({
+    accept: {
+      en: msg`Read ${link("terms")} before continuing`,
+      jp: msg`続行する前に${link("terms")}をお読みください`,
+    },
+  });
+  const anchor = (text: string): El => ({ type: "a", children: text });
+
+  it("resolves to chunks with the locale's config applied", () => {
+    expect(t("en").accept({ terms: anchor })).toEqual([
+      "Read ",
+      { type: "a", children: "the terms" },
+      " before continuing",
+    ]);
+    expect(t("jp").accept({ terms: anchor })).toEqual([
+      "続行する前に",
+      { type: "a", children: "利用規約" },
+      "をお読みください",
+    ]);
+  });
+});

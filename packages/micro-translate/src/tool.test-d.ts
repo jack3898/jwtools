@@ -153,4 +153,37 @@ describe("tool", () => {
       (dict: { count: number }) => string
     >();
   });
+
+  it("infers Out from the callback return and defaults it to string", () => {
+    const { tool } = createTranslationConfig({
+      languages: { en: {} },
+      default: "en",
+    });
+    type El = { type: string };
+    const plain = tool("a", (v: number) => String(v));
+    const rich = tool("a", (v: number): El => ({ type: `n${v}` }));
+
+    expectTypeOf(plain).toEqualTypeOf<ToolKey<"a", number>>();
+    expectTypeOf(rich).toEqualTypeOf<ToolKey<"a", number, El>>();
+  });
+
+  it("resolves a rich-tool template through define to a chunked function", () => {
+    const { define, tool } = createTranslationConfig({
+      languages: { en: {}, ja: {} },
+      default: "en",
+    });
+    type El = { type: string; children: string };
+    const link = <const Name extends string>(name: Name) =>
+      tool(name, (render: (text: string) => El) => render("the terms"));
+    const t = define({
+      k: {
+        en: msg`Read ${link("terms")} first`,
+        ja: msg`${link("terms")}`,
+      },
+    });
+
+    expectTypeOf(t("en").k).toEqualTypeOf<
+      (dict: { terms: (text: string) => El }) => string | (string | El)[]
+    >();
+  });
 });

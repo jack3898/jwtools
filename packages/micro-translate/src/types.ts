@@ -2,7 +2,7 @@ import type { AnyRef, Ref, TodoRef } from "./ref";
 
 export type TranslationValue =
   | string
-  | ((dict: never, locale?: string) => string)
+  | ((dict: never, locale?: string) => unknown)
   | AnyRef;
 
 export type TranslationDict<Language extends string = string> = Record<

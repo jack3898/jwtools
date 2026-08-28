@@ -9,6 +9,7 @@
 import { expectTypeOf } from "expect-type";
 import { msg } from ".";
 import { plural } from "./intl/plural";
+import { tool } from "./tool";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
 // still type-checks them, which is the entire point of this file.
@@ -79,5 +80,51 @@ describe("msg", () => {
 
     // @ts-expect-error - `name` must be a string | number, not a boolean.
     greet({ name: true });
+  });
+});
+
+describe("msg rich output", () => {
+  // Stands in for a framework element (React element, VNode, and so on).
+  type El = { type: string; children: string };
+
+  it("resolves to a string when every recipe renders a string", () => {
+    const shout = tool("word", (v: string) => v.toUpperCase());
+
+    expectTypeOf(msg`${shout}!`).returns.toEqualTypeOf<string>();
+  });
+
+  it("resolves to chunks when a recipe renders a non-string", () => {
+    const el = tool("icon", (v: string): El => ({ type: "img", children: v }));
+
+    expectTypeOf(msg`Look: ${el}`).returns.toEqualTypeOf<
+      string | (string | El)[]
+    >();
+  });
+
+  it("unions chunk types across rich recipes and keeps param inference", () => {
+    const el = tool("icon", (v: string): El => ({ type: "img", children: v }));
+    const n = tool("count", (v: number): bigint => BigInt(v));
+    const template = msg`${"name"}: ${el} ${n}`;
+
+    expectTypeOf(template).parameter(0).toEqualTypeOf<{
+      name: string | number;
+      icon: string;
+      count: number;
+    }>();
+    expectTypeOf(template).returns.toEqualTypeOf<
+      string | (string | El | bigint)[]
+    >();
+  });
+
+  it("supports the chunk-function pattern for markup mid-sentence", () => {
+    const link = tool("terms", (render: (text: string) => El) =>
+      render("the terms"),
+    );
+    const template = msg`Read ${link} first`;
+
+    expectTypeOf(template).parameter(0).toEqualTypeOf<{
+      terms: (text: string) => El;
+    }>();
+    expectTypeOf(template).returns.toEqualTypeOf<string | (string | El)[]>();
   });
 });

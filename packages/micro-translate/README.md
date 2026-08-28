@@ -2,7 +2,7 @@
 
 Type-safe translations that don't fight your toolchain.
 
-Zero dependencies, fully type-inferred parameters, colocated translations, tree-shakeable, native Intl APIs, extensible, no compile step.
+Zero dependencies, fully type-inferred parameters, colocated translations, tree-shakeable, native Intl APIs, framework-agnostic rich text, extensible, no compile step.
 
 ## Installation
 
@@ -320,6 +320,39 @@ A few things worth knowing:
 - **Keep your language keys literal.** Declaring `languages` as `Record<string, YourShape>` widens the key to `string` and silently turns off language checking (any `default`, any locale, missing keys all compile). Use literal keys — `Record<"en" | "ja", YourShape>` or an inline object.
 - **Reach for an annotation (not `satisfies`) when a recipe indexes config by a runtime value.** The ordinal recipe indexes `config.ordinal[category]` where `category` is computed at runtime, so the config leaf needs the widened type (`OrdinalTable`). Annotating `languages` (as above) gives the recipe that type; `satisfies` would keep the narrow literal and the lookup wouldn't type-check.
 - **Vended tools are bound to their config.** A `tool` recipe reads config from the `createTranslationConfig` it came from, so keep config-coupled recipes in the same `i18n.ts` as their config. (Rendering one outside its translator throws a clear error.)
+
+### Beyond strings: rich values
+
+A recipe doesn't just have to render a string. It can render anything representable by JavaScript.
+
+The classic use case is markup mid-sentence, like a link inside a translated sentence, without awkwardly splitting the sentence into pieces. Because it can render anything representable by JavaScript, we can return a ReactElement and render it in a React app. The only catch is you do need to know how to make a tool that can represent the destination framework's requirements.
+
+```tsx
+import type { ReactNode } from "react";
+import { msg } from "@jack3898/micro-translate";
+import { define, tool } from "./i18n";
+
+// A recipe which accepts a React Node.
+function reactElement<const Name extends string>(name: Name, text: string) {
+  return tool(name, (render: (text: string) => ReactNode) => render(text));
+}
+
+const translator = define({
+  accept: {
+    en: msg`Read ${reactElement("terms", "the terms")} before continuing`,
+    ja: msg`続行する前に${reactElement("terms", "利用規約")}をお読みください`,
+  },
+});
+
+function AcceptNotice() {
+  const t = useTranslation(translator);
+
+  // A ReactElement!
+  return <p>{t.accept({ terms: (text) => <a href="/terms">{text}</a> })}</p>;
+}
+// en: <p>Read <a href="/terms">the terms</a> before continuing</p>
+// ja: <p>続行する前に<a href="/terms">利用規約</a>をお読みください</p>
+```
 
 ## Deliberate aliasing with `ref()`
 

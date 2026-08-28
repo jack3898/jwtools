@@ -30,6 +30,13 @@
           "command": "tsx watch src/micro-translate/index.ts"
         }
       },
+      "dev:micro-translate-react": {
+        "executor": "nx:run-commands",
+        "options": {
+          "cwd": "{projectRoot}",
+          "command": "tsx watch src/micro-translate/react.tsx"
+        }
+      },
       "dev:templater": {
         "executor": "nx:run-commands",
         "options": {
@@ -46,9 +53,13 @@
     "@jack3898/lazy-object": "workspace:^",
     "@jack3898/match-collection": "workspace:^",
     "@jack3898/micro-translate": "workspace:^",
-    "@jack3898/templater": "workspace:^"
+    "@jack3898/templater": "workspace:^",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "tsx": "^4.21.0",
     "typescript": "catalog:"
   },

@@ -64,7 +64,9 @@ export function createTranslationConfig<
    * this config's per-language `config` slice; take only what you need.
    *
    * @param name The template parameter name this formatter reads.
-   * @param format Turns the value (plus locale and config) into a string.
+   * @param format Turns the value (plus locale and config) into a rendered
+   * value: usually a string, but anything else (a React element, say) makes the
+   * containing template resolve to an array of chunks.
    *
    * @example ```ts
    * // beside your config, in i18n.ts
@@ -73,15 +75,15 @@ export function createTranslationConfig<
    * // msg`${shout("word")}` -> requires { word: string }
    * ```
    */
-  const tool = <const Name extends string, V>(
+  const tool = <const Name extends string, V, Out>(
     name: Name,
     format: (
       value: V,
       locale: LooseRecordKeys<LanguageConfigRecord>,
       config: LanguageConfigRecord[LooseRecordKeys<LanguageConfigRecord>],
-    ) => string,
-  ): ToolKey<Name, V> =>
-    bareTool(name, (value: V, locale) => {
+    ) => Out,
+  ): ToolKey<Name, V, Out> =>
+    bareTool(name, (value: V, locale): Out => {
       if (locale === undefined || !isConfiguredLanguage(locale)) {
         throw new Error(
           `❌ tool("${name}") must be rendered by a translator from the same createTranslationConfig`,
