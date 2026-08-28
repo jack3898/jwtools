@@ -488,7 +488,11 @@ The design of this code favours developer experience, type safety, simplicity, p
 
 The main remedy is tree-shaking, which comes for free, but every branch of that tree still bundles all languages relevant to it. It should be noted that translations compress well, and are usually fairly small on their own so this may not be a problem depending on your situation. You may find that lazy loading more parts of your app is a good solution. But for large codebases with tens of languages, this is potentially not suitable and you should measure whether this will work for you in the context of your requirements.
 
-In addition, this package does not provide an easy way for translators to update your translations as your translations live in source code. This is either something you can work around, or a genuine problem. This codebase does not offer any solutions in that regard.
+In addition, this package does not provide an easy way for translators to update your translations as your translations live in source code. This is either something you can work around, or a genuine problem. This codebase does not offer tooling for that today.
+
+However, with that said... AI is everywhere. This translation utility fits unusually well into agentic workflows as it forces developers to be explicit and complete every single translation. If you stick to the principles of translation colocation and use the [`todo()`](#never-forget-a-translation-with-todo) utility effectively, then it becomes trivially easy for an agent to grep the codebase and generate you a standardized ICU file for translators to use. Then, when you receive your translations, use an agent to patch your codebase. Best of all, the compiler reviews the agent's work with you: a malformed or missing translation is a compile error, and any skipped key still shows up in a grep for `todo()`. After a thorough review of the patch, job done.
+
+I have considered making a standard CLI that can programmatically generate an ICU file, and it's not off the table! But it's not something I have planned for now.
 
 All in all, this should give you 90% of what you need without all the fluff!
 
