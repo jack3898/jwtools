@@ -2,7 +2,7 @@
 
 Type-safe translations that don't fight your toolchain.
 
-Zero dependencies, fully type-inferred parameters, colocated translations, tree-shakeable, native Intl APIs, framework-agnostic rich text, extensible, no compile step.
+Zero dependencies, type safe to the max, colocated translations, tree-shakeable, native Intl APIs, framework-agnostic rich text, extensible, no compile step.
 
 ## Installation
 
@@ -12,121 +12,134 @@ pnpm install @jack3898/micro-translate
 
 ## Requirements
 
-This package uses native [`Intl`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) APIs and by default are completely optional. The core needs nothing; the presets wrap `Intl.NumberFormat`, `Intl.PluralRules`, `Intl.DateTimeFormat`, `Intl.ListFormat` and `Intl.RelativeTimeFormat` - available in Node 16+ and all modern browsers. It is distributed as ESM only (see [Note on module type](#note-on-module-type)) and are imported on a different path that is separate to core.
+This package uses native [`Intl`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) APIs and by default are completely optional. The core needs nothing. The presets use Intl APIs. Any runtime that supports ESM syntax and standard Intl APIs should work which is most modern JS runtimes.
 
 ## How to use it
 
-### 1. Set up your config
+### Simplest form
 
-Declare your languages and pick a default. Each language is a **key**; its **value** is that language's config which is data your formatters can read (see [Writing your own formatters](#writing-your-own-formatters-with-tool)). If you don't have any config yet, use an empty object.
+Import `createTranslationConfig`, then define a translator, then pull the translation!
 
 ```ts
-// i18n.ts
 import { createTranslationConfig } from "@jack3898/micro-translate";
 
-export const { define, tool } = createTranslationConfig({
-  languages: { en: {}, ja: {} },
-  default: "en", // required, and strictly typed to the keys of `languages`
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {} }, // Leave language/locale config empty for now
+  default: "en-GB", // A default is required. You will learn why later!
 });
-```
-
-`default` is the locale [`todo()`](#never-forget-a-translation-with-todo) falls back to.
-
-### 2. Define your translations
-
-Then in your module, provide a value for every language in every key. This library relies on template literals for magical string interpolation.
-
-```tsx
-import { msg } from "@jack3898/micro-translate";
-import { define } from "./i18n";
 
 const translator = define({
-  submit: {
-    en: "Submit",
-    ja: "Submitto",
-  },
-  welcome: {
-    en: msg`Hey ${"name"}`,
-    ja: msg`Konnichiwa ${"name"}`,
-  },
+  hello: { "en-GB": "Hello!" },
 });
+
+const en = translator("en-GB");
+
+console.log(en.hello); // "Hello!"
 ```
 
-You must provide a value for every language and a missing one is a compile error. (See [`todo()`](#never-forget-a-translation-with-todo) for partial rollouts.)
+The empty object is a language config. When you first get started, this can stay empty. The language key (in this case "en-GB") is actually arbitrary however, it is best you stick to a standardized locale tag like a BCP-47 language tag (e.g. en-GB) for maximum compatibility with the Intl API built into any JS runtime. We don't provide types for this, because standards can drift between apps.
 
-### 3. Use the translator
+### Templating
 
-After defining your translations, you can then fetch them. Translations that used tagged template strings must be called as a function, and requires parameters to be passed in.
+Plain strings are great, however, a translation library isn't near complete without templating functionality. Templates allow you to inject custom values between your translations. Here, we bring in a new utility: `msg`. `msg` allows you to define template strings with strings as template keys. Yes, that syntax is correct!
 
-```tsx
-const t = translator("en");
+```ts
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
 
-console.log(t.submit); // "Submit"
-console.log(t.welcome({ name: "Jack" })); // "Hey Jack"
-console.log(t.welcome({ surname: "Surname" })); // type error, surname does not exist
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {} },
+  default: "en-GB",
+});
+
+const translator = define({
+  hello: { "en-GB": msg`Hello ${"object"}!` },
+});
+
+const en = translator("en-GB");
+
+console.log(en.hello({ object: "world" })); // "Hello world!"
 ```
-
-The parameters are magically inferred fully from the `msg` template literal you defined. If you change your template, then you need to update the object you pass at each call site, and TypeScript will point you at every call that no longer matches.
 
 ## Formatting with presets
 
-Tagged template strings get a whole lot more powerful when you introduce formatters. This supercharges the template strings and allows processing of values before they're injected into the final string. This covers things like number formatting, pluralization, lists and more. Best of all, using it is as easy as calling a simple function inside of the template string.
+Templates get a whole lot more powerful when you introduce formatters. This supercharges the template strings and allows processing of values. This covers things like number formatting, pluralization, lists, rich text, and more. Best of all, using it is as easy as calling a simple function inside of the template string.
 
 ### Pluralization
 
 `plural` selects the right wording for a count using runtime native `Intl.PluralRules`. This picks the right plural form, and also enforces that the value is a number when using the template.
 
-The template automatically passes the locale into `Intl.PluralRules` for you via the use of `translator("en")`. This means special cases like arabic, that have 6 plural forms, can be completely declared.
+The template automatically passes the locale into `Intl.PluralRules` for you via the use of `translator("en-GB")`. This means special cases like arabic, that have 6 plural forms, can be completely declared.
 
 ```ts
-import { msg } from "@jack3898/micro-translate";
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
 import { plural } from "@jack3898/micro-translate/intl/plural";
-import { define } from "./i18n";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {} },
+  default: "en-GB",
+});
+
+const enGBFileCount = plural("count", {
+  zero: "no files",
+  one: "one file",
+  other: "many files",
+});
 
 const translator = define({
-  fileCount: {
-    en: msg`You have ${plural("count", { one: "1 file", other: "many files" })}`,
+  files: {
+    "en-GB": msg`You have ${enGBFileCount}!`,
   },
 });
 
-const t = translator("en");
+const en = translator("en-GB");
 
-t.fileCount({ count: 1 }); // "You have 1 file"
-t.fileCount({ count: 5 }); // "You have many files"
+console.log(en.files({ count: 1 })); // "You have one file!"
 ```
 
 ### Number formatting
 
-`num` formats a number with `Intl.NumberFormat` like grouping separators, decimals, currency, percent, and so on. This also enforces at the type level that the `count` must be provided as a number only:
+`num` formats a number with `Intl.NumberFormat` like grouping separators, decimals, currency, percent, and so on.
 
 ```ts
-import { msg } from "@jack3898/micro-translate";
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
 import { num } from "@jack3898/micro-translate/intl/num";
-import { define } from "./i18n";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {}, "de-DE": {} },
+  default: "en-GB",
+});
 
 const translator = define({
   available: {
-    en: msg`There are ${num("count")} available`,
-    de: msg`Es sind ${num("count")} verfügbar`,
+    "en-GB": msg`There are ${num("count")} available`,
+    "de-DE": msg`Es sind ${num("count")} verfügbar`,
   },
 });
 
-translator("en").available({ count: 1234567 }); // "There are 1,234,567 available"
-translator("de").available({ count: 1234567 }); // "Es sind 1.234.567 verfügbar"
+console.log(translator("en-GB").available({ count: 1234567 })); // "There are 1,234,567 available"
+console.log(translator("de-DE").available({ count: 1234567 })); // "Es sind 1.234.567 verfügbar"
 ```
 
 And because it is a light wrapper over `Intl.NumberFormat` it can forward any [`Intl.NumberFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat/NumberFormat#options) parameters for more control:
 
 ```ts
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
+import { num } from "@jack3898/micro-translate/intl/num";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {}, "de-DE": {} },
+  default: "en-GB",
+});
+
 const translator = define({
   price: {
-    en: msg`${num("amount", { style: "currency", currency: "USD" })}`,
-    de: msg`${num("amount", { style: "currency", currency: "EUR" })}`,
+    "en-GB": msg`${num("amount", { style: "currency", currency: "GBP" })}`,
+    "de-DE": msg`${num("amount", { style: "currency", currency: "EUR" })}`,
   },
 });
 
-translator("en").price({ amount: 1234.5 }); // "$1,234.50"
-translator("de").price({ amount: 1234.5 }); // "1.234,50 €"
+console.log(translator("en-GB").price({ amount: 1234.5 })); // "£1,234.50"
+console.log(translator("de-DE").price({ amount: 1234.5 })); // "1.234,50 €"
 ```
 
 ### Dates
@@ -134,19 +147,23 @@ translator("de").price({ amount: 1234.5 }); // "1.234,50 €"
 `date` formats a `Date` (or an epoch-millisecond number) with `Intl.DateTimeFormat`. Pass any [`Intl.DateTimeFormatOptions`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/DateTimeFormat#options). This one enforces that the values provided to the templates must be a valid Date instance or epoch millisecond number:
 
 ```ts
-import { msg } from "@jack3898/micro-translate";
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
 import { date } from "@jack3898/micro-translate/intl/date";
-import { define } from "./i18n";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {}, "de-DE": {} },
+  default: "en-GB",
+});
 
 const translator = define({
   published: {
-    en: msg`Published ${date("on", { dateStyle: "long" })}`,
-    de: msg`Veröffentlicht am ${date("on", { dateStyle: "long" })}`,
+    "en-GB": msg`Published ${date("on", { dateStyle: "long" })}`,
+    "de-DE": msg`Veröffentlicht am ${date("on", { dateStyle: "long" })}`,
   },
 });
 
-translator("en").published({ on: new Date("2020-01-15") }); // "Published January 15, 2020"
-translator("de").published({ on: new Date("2020-01-15") }); // "Veröffentlicht am 15. Januar 2020"
+console.log(translator("en-GB").published({ on: new Date("2020-01-15") })); // "Published 15 January 2020"
+console.log(translator("de-DE").published({ on: new Date("2020-01-15") })); // "Veröffentlicht am 15. Januar 2020"
 ```
 
 ### Lists
@@ -154,15 +171,21 @@ translator("de").published({ on: new Date("2020-01-15") }); // "Veröffentlicht 
 `list` joins a `string[]` with the locale's grammar using `Intl.ListFormat` like commas, the right conjunction, an Oxford comma where the locale uses one. This one enforces that the values provided to the templates must be an array of strings.
 
 ```ts
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
 import { list } from "@jack3898/micro-translate/intl/list";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {} },
+  default: "en-GB",
+});
 
 const translator = define({
   invited: {
-    en: msg`You invited ${list("names")}`,
+    "en-GB": msg`You invited ${list("names")}`,
   },
 });
 
-translator("en").invited({ names: ["Ada", "Grace", "Alan"] }); // "You invited Ada, Grace, and Alan"
+console.log(translator("en-GB").invited({ names: ["Ada", "Grace", "Alan"] })); // "You invited Ada, Grace and Alan"
 ```
 
 And as usual, it can forward the options. So you can pass `{ type: "disjunction" }` for "or" lists, `{ style: "short" }`, and so on.
@@ -172,16 +195,22 @@ And as usual, it can forward the options. So you can pass `{ type: "disjunction"
 `relativeTime` formats an amount and a unit ("3 days ago", "in 2 hours") with `Intl.RelativeTimeFormat`. Its parameter bundles **both** inputs into one typed value, `{ value, unit }`:
 
 ```ts
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
 import { relativeTime } from "@jack3898/micro-translate/intl/relative-time";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {} },
+  default: "en-GB",
+});
 
 const translator = define({
   edited: {
-    en: msg`Edited ${relativeTime("when")}`,
+    "en-GB": msg`Edited ${relativeTime("when")}`,
   },
 });
 
-translator("en").edited({ when: { value: -3, unit: "day" } }); // "Edited 3 days ago"
-translator("en").edited({ when: { value: 2, unit: "hour" } }); // "Edited in 2 hours"
+console.log(translator("en-GB").edited({ when: { value: -3, unit: "day" } })); // "Edited 3 days ago"
+console.log(translator("en-GB").edited({ when: { value: 2, unit: "hour" } })); // "Edited in 2 hours"
 ```
 
 Pass `{ numeric: "auto" }` to get "yesterday"/"tomorrow" where the locale has them. (Bundling multiple inputs into one parameter is a pattern you can reuse in your own recipes, see below.)
@@ -197,30 +226,33 @@ All of the above utilities seen so far aren't special, they're `tool` recipes pr
 This is one of the simplest examples. A formatter that makes values uppercase. The magic with `tool()` is that it has hidden away all of the typing complexities that you would have to manage on your own without it. This package is highly type-safe, so `tool()` was created to guide you down the right path.
 
 ```ts
-import { tool } from "./i18n"; // tool is returned from your `createTranslationConfig()`
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
+
+// tool is returned from your `createTranslationConfig()`
+const { define, tool } = createTranslationConfig({
+  languages: { "en-GB": {} },
+  default: "en-GB",
+});
 
 function shout<const Name extends string>(name: Name) {
   return tool(name, (value: string) => value.toUpperCase());
 }
 
-// define({ hi: { en: msg`${shout("word")}!` } })
-// translator("en").hi({ word: "hey" }) -> "HEY!"
+const translator = define({
+  hi: { "en-GB": msg`${shout("word")}!` },
+});
+
+console.log(translator("en-GB").hi({ word: "hey" })); // "HEY!"
 ```
 
-> ⚠️ The signature of tool() must use the generic `const Name extends string` as shown above. Otherwise your dictionary types will collapse and you will lose type safety.
+> ⚠️ The signature of your recipe must use the generic `const Name extends string` as shown above. Otherwise your dictionary types will collapse and you will lose type safety.
 
 Notice `value: string` parameter in the function passed into `tool()`? That's actually doing a lot of heavy lifting as it's what provides the value type for the templates. E.g., the above custom tool will reject anything but a string:
 
 ```ts
-// ... your shout tool is defined in this module
+// ...continuing from the example above
 
-const translator = define({
-  shouted: {
-    en: msg`Edited ${shout("word")}`,
-  },
-});
-
-translator("en").shouted({ word: true }); // error: must be a string (as per `value: string` in the tool signature)
+translator("en-GB").hi({ word: true }); // error: must be a string (as per `value: string` in the tool signature)
 ```
 
 ### Detect locale in your tool
@@ -230,6 +262,13 @@ The callback receives up to three arguments, and you take only what you need whe
 For example, this is how the `num` preset is built (though you may want to cache the `new Intl.NumberFormat` construction):
 
 ```ts
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
+
+const { define, tool } = createTranslationConfig({
+  languages: { "en-GB": {}, "de-DE": {} },
+  default: "en-GB",
+});
+
 function money<const Name extends string>(name: Name) {
   return tool(name, (value: number, locale) => {
     return new Intl.NumberFormat(locale, {
@@ -238,6 +277,16 @@ function money<const Name extends string>(name: Name) {
     }).format(value);
   });
 }
+
+const translator = define({
+  total: {
+    "en-GB": msg`Total: ${money("amount")}`,
+    "de-DE": msg`Summe: ${money("amount")}`,
+  },
+});
+
+console.log(translator("en-GB").total({ amount: 9.99 })); // "Total: US$9.99"
+console.log(translator("de-DE").total({ amount: 9.99 })); // "Summe: 9,99 $"
 ```
 
 ### Fetch translator config in your tool
@@ -249,26 +298,25 @@ Ordinals are the great example as the suffixes (`st`/`nd`/`rd`/`th`) are a prope
 Because `config` is entirely yours, and this library does not enforce a shape (see [Per-language config](#per-language-config)), define it and put your data in `languages`:
 
 ```ts
-// i18n.ts
 import { createTranslationConfig } from "@jack3898/micro-translate";
 import type { PluralRule } from "@jack3898/micro-translate/intl/plural";
 
 export const { define, tool } = createTranslationConfig({
   languages: {
-    en: {
+    "en-GB": {
       ordinal: { one: "st", two: "nd", few: "rd", other: "th" },
       currency: "GBP",
     },
-    ja: {
+    "ja-JP": {
       ordinal: { other: "番目" },
       currency: "JPY",
     },
-    fr: {
+    "fr-FR": {
       ordinal: { one: "er", other: "e" },
       currency: "EUR",
     },
   },
-  default: "en",
+  default: "en-GB",
 });
 
 export const ordinal = <const Name extends string>(name: Name) =>
@@ -294,17 +342,21 @@ function money<const Name extends string>(name: Name) {
 ```
 
 ```ts
+// my-component.ts
+import { msg } from "@jack3898/micro-translate";
+import { define, ordinal } from "./i18n";
+
 const translator = define({
   finished: {
-    en: msg`You came ${ordinal("place")}`,
-    ja: msg`${ordinal("place")}`,
-    fr: msg`Vous êtes ${ordinal("place")}`,
+    "en-GB": msg`You came ${ordinal("place")}`,
+    "ja-JP": msg`${ordinal("place")}`,
+    "fr-FR": msg`Vous êtes ${ordinal("place")}`,
   },
 });
 
-translator("en").finished({ place: 22 }); // "You came 22nd"
-translator("ja").finished({ place: 1 }); // "1番目"
-translator("fr").finished({ place: 1 }); // "Vous êtes 1er"
+console.log(translator("en-GB").finished({ place: 22 })); // "You came 22nd"
+console.log(translator("ja-JP").finished({ place: 1 })); // "1番目"
+console.log(translator("fr-FR").finished({ place: 1 })); // "Vous êtes 1er"
 ```
 
 The beauty with this system is that the type of `config` as used in the `tool()` is automatically inferred from your root `createTranslationConfig`. No need to manually type it.
@@ -313,11 +365,11 @@ This brings you closer to the browser's `Intl` API rather than hiding it behind 
 
 ### Per-language config
 
-The library owns only the outer keying: `languages` must be `{ [language]: yourConfig }`. **The shape of each value is entirely yours** be it a string, an object, nested maps, whatever your recipes need. The library never looks inside it and it's used strictly for your own `tool()` recipes.
+`languages` in your `createTranslationConfig` must be `{ [language]: yourConfig }`. **The shape of each value is entirely yours** be it a string, an object, nested maps, whatever your recipes need. The library never looks inside it and it's used strictly for your own `tool()` recipes.
 
 A few things worth knowing:
 
-- **Keep your language keys literal.** Declaring `languages` as `Record<string, YourShape>` widens the key to `string` and silently turns off language checking (any `default`, any locale, missing keys all compile). Use literal keys — `Record<"en" | "ja", YourShape>` or an inline object.
+- **Keep your language keys literal.** Declaring `languages` as `Record<string, YourShape>` widens the key to `string` and silently turns off language checking (any `default`, any locale, missing keys all compile). Use literal keys: `Record<"en-GB" | "ja-JP", YourShape>` or an inline object.
 - **Reach for an annotation (not `satisfies`) when a recipe indexes config by a runtime value.** The ordinal recipe indexes `config.ordinal[category]` where `category` is computed at runtime, so the config leaf needs the widened type (`OrdinalTable`). Annotating `languages` (as above) gives the recipe that type; `satisfies` would keep the narrow literal and the lookup wouldn't type-check.
 - **Vended tools are bound to their config.** A `tool` recipe reads config from the `createTranslationConfig` it came from, so keep config-coupled recipes in the same `i18n.ts` as their config. (Rendering one outside its translator throws a clear error.)
 
@@ -329,8 +381,12 @@ The classic use case is markup mid-sentence, like a link inside a translated sen
 
 ```tsx
 import type { ReactNode } from "react";
-import { msg } from "@jack3898/micro-translate";
-import { define, tool } from "./i18n";
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
+
+const { define, tool } = createTranslationConfig({
+  languages: { "en-GB": {}, "ja-JP": {} },
+  default: "en-GB",
+});
 
 // A recipe which accepts a React Node.
 function reactElement<const Name extends string>(name: Name, text: string) {
@@ -339,65 +395,65 @@ function reactElement<const Name extends string>(name: Name, text: string) {
 
 const translator = define({
   accept: {
-    en: msg`Read ${reactElement("terms", "the terms")} before continuing`,
-    ja: msg`続行する前に${reactElement("terms", "利用規約")}をお読みください`,
+    "en-GB": msg`Read ${reactElement("terms", "the terms")} before continuing`,
+    "ja-JP": msg`続行する前に${reactElement("terms", "利用規約")}をお読みください`,
   },
 });
 
 function AcceptNotice() {
-  const t = useTranslation(translator);
+  const t = translator("en-GB"); // or resolve the locale from context (see the hook below)
 
   // A ReactElement!
   return <p>{t.accept({ terms: (text) => <a href="/terms">{text}</a> })}</p>;
 }
-// en: <p>Read <a href="/terms">the terms</a> before continuing</p>
-// ja: <p>続行する前に<a href="/terms">利用規約</a>をお読みください</p>
+// en-GB: <p>Read <a href="/terms">the terms</a> before continuing</p>
+// ja-JP: <p>続行する前に<a href="/terms">利用規約</a>をお読みください</p>
 ```
 
 ## Deliberate aliasing with `ref()`
 
-`ref` earns its place in proportion to the character-for-character overlap between locales which is very useful for close dialects (`en-gb`/`en-us`, `de-de`/`de-at`), rarely for unrelated languages. Rather than copy-pasting identical values (and risking drift), forward one locale to another in the same key:
+`ref` earns its place in proportion to the character-for-character overlap between locales which is very useful for close dialects (`en-GB`/`en-US`, `de-DE`/`de-AT`), rarely for unrelated languages. Rather than copy-pasting identical values (and risking drift), forward one locale to another in the same key:
 
 ```ts
 import { createTranslationConfig, msg, ref } from "@jack3898/micro-translate";
 
 const { define } = createTranslationConfig({
-  languages: { "en-gb": {}, "en-us": {}, "en-au": {} },
-  default: "en-gb",
+  languages: { "en-GB": {}, "en-US": {}, "en-AU": {} },
+  default: "en-GB",
 });
 
 const translator = define({
   // Every dialect agrees, so forward to the base.
   submit: {
-    "en-gb": "Submit",
-    "en-us": ref("en-gb"),
-    "en-au": ref("en-gb"),
+    "en-GB": "Submit",
+    "en-US": ref("en-GB"),
+    "en-AU": ref("en-GB"),
   },
   // GB differs; US and AU share the same word, so AU forwards to US.
   carPark: {
-    "en-gb": "Car park",
-    "en-us": "Parking lot",
-    "en-au": ref("en-us"), // forward to a dialect, not just the default
+    "en-GB": "Car park",
+    "en-US": "Parking lot",
+    "en-AU": ref("en-US"), // forward to a dialect, not just the default
   },
   // GB and AU share the spelling; US diverges on its own.
   colour: {
-    "en-gb": "Colour",
-    "en-us": "Color",
-    "en-au": ref("en-gb"),
+    "en-GB": "Colour",
+    "en-US": "Color",
+    "en-AU": ref("en-GB"),
   },
 });
 
-translator("en-au").submit; // "Submit"      (via en-gb)
-translator("en-au").carPark; // "Parking lot" (via en-us)
-translator("en-au").colour; // "Colour"       (via en-gb)
-translator("en-us").colour; // "Color"        (its own value)
+translator("en-AU").submit; // "Submit"      (via en-GB)
+translator("en-AU").carPark; // "Parking lot" (via en-US)
+translator("en-AU").colour; // "Colour"       (via en-GB)
+translator("en-US").colour; // "Color"        (its own value)
 ```
 
-`ref("en-gb")` adopts `en-gb`'s value completely. It also forwards along all of the type safety you know and love.
+`ref("en-GB")` adopts `en-GB`'s value completely. It also forwards along all of the type safety you know and love.
 
 One caveat is that there's no override mechanism. If a locale diverges in any way (wording, order, formatting), write a fresh template instead. This was an intentional decision as it keeps things simple to reason about and explicit. Two rules keep it safe, enforced at compile time **and** guarded at runtime:
 
-1. The target must be another locale in the same key. `ref("fr")` where `fr` isn't a sibling is an error.
+1. The target must be another locale in the same key. `ref("fr-FR")` where `fr-FR` isn't a sibling is an error.
 2. The target must be a real value, never another `ref()`/`todo()`. This one-hop rule makes chains, cycles and self-reference structurally impossible.
 
 ## Never forget a translation with `todo()`
@@ -415,19 +471,19 @@ import {
 } from "@jack3898/micro-translate";
 
 const { define } = createTranslationConfig({
-  languages: { "en-gb": {}, "en-us": {}, "en-au": {} },
-  default: "en-gb",
+  languages: { "en-GB": {}, "en-US": {}, "en-AU": {} },
+  default: "en-GB",
 });
 
 const translator = define({
   welcome: {
-    "en-gb": msg`Hey ${"name"}`,
-    "en-us": ref("en-gb"), // semantics imply permanent: identical to British English
-    "en-au": todo(), // semantics imply this is temporary: not localized yet, falls back to "en-gb"
+    "en-GB": msg`Hey ${"name"}`,
+    "en-US": ref("en-GB"), // semantics imply permanent: identical to British English
+    "en-AU": todo(), // semantics imply this is temporary: not localized yet, falls back to "en-GB"
   },
 });
 
-translator("en-au").welcome({ name: "Jack" }); // "Hey Jack" (fallback)
+translator("en-AU").welcome({ name: "Jack" }); // "Hey Jack" (fallback)
 ```
 
 This gives you gap-free incremental localization:
@@ -442,7 +498,8 @@ This gives you gap-free incremental localization:
 Often you'll want to fetch the active locale once like from a context, a logged-in user, etc. and hand back a ready-to-use translator:
 
 ```tsx
-type Locale = "en" | "ja"; // your app's locales
+// use-translation.ts
+type Locale = "en-GB" | "ja-JP"; // your app's locales
 
 export function useTranslation<T>(translator: (locale: Locale) => T): T {
   const locale = useUserLocale(); // your locale source
@@ -454,9 +511,14 @@ export function useTranslation<T>(translator: (locale: Locale) => T): T {
 Then a component passes its colocated translator straight in and keeps full autocomplete and type-safety on every key:
 
 ```tsx
+// my-component.tsx
+import { msg } from "@jack3898/micro-translate";
+import { define } from "./i18n";
+import { useTranslation } from "./use-translation";
+
 const translator = define({
-  submit: { en: "Submit", ja: "Submitto" },
-  welcome: { en: msg`Hey ${"name"}`, ja: msg`Konnichiwa ${"name"}` },
+  submit: { "en-GB": "Submit", "ja-JP": "Submitto" },
+  welcome: { "en-GB": msg`Hey ${"name"}`, "ja-JP": msg`Konnichiwa ${"name"}` },
 });
 
 function MyComponent() {
@@ -464,6 +526,8 @@ function MyComponent() {
 
   return <p>{t.welcome({ name: "World" })}</p>; // fully typed
 }
+// en-GB: <p>Hey World</p>
+// ja-JP: <p>Konnichiwa World</p>
 ```
 
 They key is that you simply need to provide a mechanism to feed the locale into the translator. If you can solve that, then you're golden. One downside is that each module or block requires you to reach into context of a user to fetch their locale - but that's a small price to pay.
@@ -482,17 +546,25 @@ Global translations can be hard to maintain for a variety of reasons. They can g
 
 ## Tradeoffs
 
+### Not tested for enterprise
+
 This package is not for enterprise grade software and does not seek to replace or claim to be better than alternatives like i18next! Those are battle tested and highly powerful with huge ecosystems.
 
-The design of this code favours developer experience, type safety, simplicity, package size and translation colocation by design. Each module needs all translations, which means users will be loading other translations not relevant to them in addition to their selected language if this is used in a frontend. One perk is that switching languages will be instantaneous for end users.
+### Translations are not lazy
+
+The design of this code favours developer experience, type safety, simplicity, package size and translation colocation by design. Each module needs all translations (e.g. all variants of the word "Submit" for a button), which means users will be loading other translations not relevant to them in addition to their selected language if this is used in a frontend. One perk is that switching languages will be instantaneous for end users.
 
 The main remedy is tree-shaking, which comes for free, but every branch of that tree still bundles all languages relevant to it. It should be noted that translations compress well, and are usually fairly small on their own so this may not be a problem depending on your situation. You may find that lazy loading more parts of your app is a good solution. But for large codebases with tens of languages, this is potentially not suitable and you should measure whether this will work for you in the context of your requirements.
 
-In addition, this package does not provide an easy way for translators to update your translations as your translations live in source code. This is either something you can work around, or a genuine problem. This codebase does not offer tooling for that today.
+### No out-of-the-box support for translators
 
-However, with that said... AI is everywhere. This translation utility fits unusually well into agentic workflows as it forces developers to be explicit and complete every single translation. If you stick to the principles of translation colocation and use the [`todo()`](#never-forget-a-translation-with-todo) utility effectively, then it becomes trivially easy for an agent to grep the codebase and generate you a standardized ICU file for translators to use. Then, when you receive your translations, use an agent to patch your codebase. Best of all, the compiler reviews the agent's work with you: a malformed or missing translation is a compile error, and any skipped key still shows up in a grep for `todo()`. After a thorough review of the patch, job done.
+This package does not provide an easy way for translators to update your translations as your translations live in source code. This is either something you can work around, or a genuine problem. This codebase does not offer tooling for that today.
 
-I have considered making a standard CLI that can programmatically generate an ICU file, and it's not off the table! But it's not something I have planned for now.
+**However, with that said... AI is everywhere.** This translation library fits extremely well into agentic workflows as it forces developers to be explicit, fix compile errors, and complete every single translation.
+
+If you stick to the principles of translation colocation and use the [`todo()`](#never-forget-a-translation-with-todo) utility effectively, then it becomes trivially easy for an agent to grep the codebase and generate you a standardized file for translators. Then, when you receive your human-made translations, use an agent to patch them into your codebase. Any missing translations can be easily identified and reviewed.
+
+I have considered making a standard CLI that can programmatically generate a translation file, and it's not off the table! But it's not something I have planned for now.
 
 All in all, this should give you 90% of what you need without all the fluff!
 
@@ -500,7 +572,7 @@ All in all, this should give you 90% of what you need without all the fluff!
 
 This package is distributed with ESM syntax only.
 
-I apologise in advance for any inconvenience this may cause.
+I apologize in advance for any inconvenience this may cause.
 
 ## License
 
