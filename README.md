@@ -8,6 +8,7 @@ A collection of TypeScript utilities and libraries that I find useful for myself
 - [@jack3898/match-collection](./packages/match-collection/README.md): A tiny zero-dependency package that lets you match whether a list of items meets a very specific condition.
 - [@jack3898/templater](./packages/templater/README.md): A tiny zero-dependency package for creating type-safe string templates using plain old template literals.
 - [@jack3898/micro-translate](./packages/micro-translate/README.md): Tiny super type-safe zero-dependency utility for translations in any JS app. No magic, no build/compile step.
+- [@jack3898/power-seed](./packages/power-seed/README.md): A powerful, type-safe database seeding library.
 
 ## Contributing
 

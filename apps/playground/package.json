@@ -46,6 +46,13 @@
       },
       "type-check": {
         "defaultConfiguration": "type-check"
+      },
+      "dev:power-seed": {
+        "executor": "nx:run-commands",
+        "options": {
+          "cwd": "{projectRoot}",
+          "command": "tsx watch src/power-seed/index.ts"
+        }
       }
     }
   },
@@ -53,6 +60,7 @@
     "@jack3898/lazy-object": "workspace:^",
     "@jack3898/match-collection": "workspace:^",
     "@jack3898/micro-translate": "workspace:^",
+    "@jack3898/power-seed": "workspace:^",
     "@jack3898/templater": "workspace:^",
     "react": "catalog:",
     "react-dom": "catalog:"

@@ -1,0 +1,63 @@
+{
+  "name": "@jack3898/power-seed",
+  "description": "A powerful, type-safe database seeding library.",
+  "version": "0.1.0",
+  "author": "Jack Wright",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "nx": {
+    "sourceRoot": "{projectRoot}/src",
+    "projectType": "library",
+    "targets": {
+      "build": {
+        "defaultConfiguration": "build"
+      },
+      "prepack": {
+        "defaultConfiguration": "build"
+      },
+      "dev": {
+        "defaultConfiguration": "dev"
+      },
+      "type-check": {
+        "defaultConfiguration": "type-check"
+      },
+      "publish": {
+        "defaultConfiguration": "publish"
+      }
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  },
+  "files": [
+    "./dist",
+    "./LICENSE",
+    "./README.md"
+  ],
+  "keywords": [
+    "database",
+    "esm",
+    "fixtures",
+    "seed",
+    "seeder",
+    "seeding",
+    "test-data",
+    "type-safe",
+    "utility",
+    "vanilla",
+    "deterministic",
+    "orm",
+    "orm-agnostic"
+  ],
+  "repository": "jack3898/jwtools.git",
+  "types": "./dist/index.d.ts"
+}
