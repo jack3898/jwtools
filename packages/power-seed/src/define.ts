@@ -63,10 +63,7 @@ export type Seed<
   readonly namespace: string | undefined;
   /** Carried so an entry's `config` can be typed from its seeder. */
   readonly defaults: C | undefined;
-  readonly resolve: (
-    run: Run<X>,
-    config: SeedConfig,
-  ) => Promise<Handle<Insert, A>>;
+  readonly resolve: (run: Run<X>) => Promise<Handle<Insert, A>>;
 };
 
 /** One seeding run. Created by the engine, never by hand. */
@@ -84,8 +81,9 @@ export type Run<X extends object> = {
     id: string,
     values: object,
   ) => Promise<void>;
-  readonly configFor: (parent: SeedConfig, name: string) => SeedConfig;
-  readonly get: (config: SeedConfig) => Get<X>;
+  /** The overrides an entry attached to this seed, keyed by identity. */
+  readonly configOf: (seed: object) => SeedConfig;
+  readonly get: Get<X>;
   readonly enter: (name: string) => void;
   readonly leave: () => void;
   /** Queues a link to run once every seed in this run has inserted. */
@@ -148,11 +146,10 @@ export type SeedDefinition<
   /**
    * Ids derive within this namespace. Two seeds writing the same target from
    * different worlds must set different ones, or they mint identical ids for
-   * unrelated rows and whichever runs second is silently dropped by the
-   * adapter's conflict handling while its handle still vouches for the row.
+   * unrelated rows and the run refuses the second.
    */
   readonly namespace?: string;
-  /** Config the caller may override by seed name. Every key must be declared here. */
+  /** Config an entry may override. Every key must be declared here. */
   readonly defaults?: C;
   readonly build: (
     args: BuildArgs<C, X>,
@@ -185,19 +182,20 @@ export function defineSeed<
   // needs no assertion to read them back.
   const cache = new WeakMap<Run<X>, Promise<Handle<Insert, A>>>();
 
-  const seed = {
+  const seed: Seed<Target, Insert, A, X, C> = {
     name: definition.name,
     target: definition.target,
     namespace: definition.namespace,
     defaults: definition.defaults,
-    resolve: (run: Run<X>, config: SeedConfig): Promise<Handle<Insert, A>> => {
+    resolve: (run) => {
       const cached = cache.get(run);
 
       if (cached) {
         return cached;
       }
 
-      const pending = build(definition, run, config);
+      // The seed hands itself over, since config is keyed by its identity.
+      const pending = build(definition, run, seed);
 
       cache.set(run, pending);
 
@@ -217,7 +215,7 @@ async function build<
 >(
   definition: SeedDefinition<Target, Insert, C, A, X>,
   run: Run<X>,
-  config: SeedConfig,
+  self: object,
 ): Promise<Handle<Insert, A>> {
   const meta: SeedMeta = {
     name: definition.name,
@@ -226,9 +224,9 @@ async function build<
   };
   const name = run.nameOf(meta);
   const toolkit = run.toolkit(meta);
-  // Keyed by name from the root, never by position: a seed is built once and
-  // shared, so it cannot take different config down different paths.
-  const provided = run.configFor(config, name);
+  // A seed is built once and shared, so it cannot take different config down
+  // different paths: whatever its own entry said applies wherever it is met.
+  const provided = run.configOf(self);
 
   const merged = resolveConfig(name, definition.defaults, provided);
 
@@ -237,7 +235,7 @@ async function build<
   const built = await definition.build({
     ...toolkit,
     config: merged,
-    get: run.get(config),
+    get: run.get,
   });
 
   run.leave();
@@ -264,7 +262,7 @@ async function build<
       link({
         ...toolkit,
         config: merged,
-        get: run.get(config),
+        get: run.get,
         rows: written,
         update: (id, values) => run.update(definition.target, id, values),
         updateIn: (other, id, values) => run.update(other.target, id, values),

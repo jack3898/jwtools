@@ -95,6 +95,18 @@ describe("ids", () => {
     ]);
   });
 
+  it("are refused when another seed in the run already minted them", async () => {
+    const adapter = memoryAdapter<string>();
+    const one = defineSeed({ target: "things", build: () => [{ n: 1 }] });
+    const two = defineSeed({ target: "things", build: () => [{ n: 2 }] });
+
+    await expect(
+      seed(adapter, [{ seeder: one }, { seeder: two }], { dryRun: true }),
+    ).rejects.toThrow(
+      /^Seed "things" minted id "[0-9a-f-]{36}" for things, which this run already wrote/,
+    );
+  });
+
   it("derive from the raw target name, so a renamed seed keeps them", async () => {
     const adapter = memoryAdapter<string>();
     const [plain] = await seed(adapter, [{ seeder: pair }], { dryRun: true });

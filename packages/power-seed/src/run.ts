@@ -1,7 +1,6 @@
 import type { Adapter } from "./adapter";
 import type {
   ConfigOf,
-  Get,
   HandleOf,
   Run,
   Seed,
@@ -89,6 +88,7 @@ function camelCase(value: string): string {
 function createRun<Target, X extends object>(
   adapter: Adapter<Target>,
   options: BaseRunOptions<X>,
+  configs: ReadonlyMap<object, SeedConfig>,
 ): Run<X> {
   const seed = options.seed ?? FIXED_SEED;
   const now = options.now ?? FIXED_NOW;
@@ -159,6 +159,15 @@ function createRun<Target, X extends object>(
       held.set(meta.target, heldRows);
 
       for (const { id, values } of rows) {
+        // Same id, same row, is what makes a rerun safe. Within one run it
+        // means two seeds minted the same id, and the adapter would keep the
+        // first while the second's handle vouches for rows that never landed.
+        if (heldRows.has(id)) {
+          throw new Error(
+            `Seed "${name}" minted id "${id}" for ${targetNameOf(meta)}, which this run already wrote. Two seeds on one target need different names or namespaces.`,
+          );
+        }
+
         heldRows.set(id, values);
       }
 
@@ -217,29 +226,19 @@ function createRun<Target, X extends object>(
       }
     },
 
-    configFor: (parent, name) => {
-      const nested = parent[name];
+    configOf: (seed) => configs.get(seed) ?? {},
 
-      return typeof nested === "object" &&
-        nested !== null &&
-        !Array.isArray(nested)
-        ? { ...nested }
-        : {};
+    get: (dependency) => {
+      const dependencyName = nameOf(dependency);
+
+      if (stack.includes(dependencyName)) {
+        throw new Error(
+          `Seed dependency cycle: ${[...stack, dependencyName].join(" -> ")}`,
+        );
+      }
+
+      return dependency.resolve(run);
     },
-
-    get:
-      (config): Get<X> =>
-      (dependency) => {
-        const dependencyName = nameOf(dependency);
-
-        if (stack.includes(dependencyName)) {
-          throw new Error(
-            `Seed dependency cycle: ${[...stack, dependencyName].join(" -> ")}`,
-          );
-        }
-
-        return dependency.resolve(run, config);
-      },
 
     enter: (name) => {
       stack.push(name);
@@ -298,23 +297,21 @@ export async function seed<
 ): Promise<Handles<S>> {
   // The conditional keeps callers honest; by here both shapes are the same.
   const [options] = args as [BaseRunOptions<X>?];
-  const shared = createRun(adapter, options ?? {});
-  const config: Record<string, SeedConfig> = {};
+  const configs = new Map<object, SeedConfig>();
+  const shared = createRun(adapter, options ?? {}, configs);
 
   for (const entry of entries) {
-    const name = shared.nameOf(entry.seeder);
-
-    if (config[name] !== undefined) {
-      throw new Error(`Seed "${name}" is listed twice`);
+    if (configs.has(entry.seeder)) {
+      throw new Error(`Seed "${shared.nameOf(entry.seeder)}" is listed twice`);
     }
 
-    config[name] = entry.config ?? {};
+    configs.set(entry.seeder, entry.config ?? {});
   }
 
   const handles: Array<unknown> = [];
 
   for (const entry of entries) {
-    handles.push(await entry.seeder.resolve(shared, config));
+    handles.push(await entry.seeder.resolve(shared));
   }
 
   await shared.runLinks();

@@ -394,7 +394,7 @@ Fires for every seed the run wrote, deepest first. `rows` counts rows offered, n
 
 ## Namespaces and ids
 
-Ids are UUID v5: a hash of the target name, the seed name and the row index, inside a namespace. Two seeds that write the same target from different worlds, a dev profile and an integration fixture say, must use different namespaces or they mint identical ids for unrelated rows:
+Ids are UUID v5: a hash of the target name, the seed name and the row index, inside a namespace. Two seeds that write the same target from different worlds, a dev profile and an integration fixture say, must use different namespaces, or they mint identical ids for unrelated rows and the run refuses the second:
 
 ```ts
 export const INTEGRATION = "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14";
