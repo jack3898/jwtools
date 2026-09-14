@@ -256,3 +256,77 @@ describe("config", () => {
     ).rejects.toThrow('Seed "things" is listed twice');
   });
 });
+
+describe("streams", () => {
+  const draw = (target: string) =>
+    defineSeed({
+      target,
+      build: ({ random }) => [
+        { value: random.int({ min: 0, max: 1_000_000 }) },
+      ],
+    });
+  const noise = defineSeed({
+    target: "noise",
+    build: ({ random }) =>
+      Array.from({ length: 10 }, () => ({ value: random.float() })),
+  });
+  const things = draw("things");
+  const dependent = defineSeed({
+    target: "dependent",
+    build: async ({ get, random }) => {
+      await get(noise);
+
+      return [{ value: random.int({ min: 0, max: 1_000_000 }) }];
+    },
+  });
+
+  it("give a seed the same values whatever else is in the run", async () => {
+    const adapter = memoryAdapter<string>();
+    const options = { dryRun: true };
+    const value = (handle: { first: () => { row: { value: number } } }) =>
+      handle.first().row.value;
+
+    const [alone] = await seed(adapter, [{ seeder: things }], options);
+    const [, after] = await seed(
+      adapter,
+      [{ seeder: noise }, { seeder: things }],
+      options,
+    );
+    const [before] = await seed(
+      adapter,
+      [{ seeder: things }, { seeder: noise }],
+      options,
+    );
+
+    expect(value(after)).toBe(value(alone));
+    expect(value(before)).toBe(value(alone));
+    // A seed that draws after pulling in a noisy dependency is unaffected too.
+    const [viaNoise] = await seed(adapter, [{ seeder: dependent }], options);
+    const [sameTargetAlone] = await seed(
+      adapter,
+      [{ seeder: draw("dependent") }],
+      options,
+    );
+
+    expect(value(viaNoise)).toBe(value(sameTargetAlone));
+  });
+
+  it("hand extend a seed of the seed's own, stable across runs", async () => {
+    const adapter = memoryAdapter<string>();
+    const seen: Array<number> = [];
+    const extend = ({ seed: own }: { seed: number }) => {
+      seen.push(own);
+
+      return {};
+    };
+
+    await seed(adapter, [{ seeder: things }, { seeder: noise }], { extend });
+    await seed(adapter, [{ seeder: noise }, { seeder: things }], { extend });
+
+    const [things1, noise1, noise2, things2] = seen;
+
+    expect(things1).toBe(things2);
+    expect(noise1).toBe(noise2);
+    expect(things1).not.toBe(noise1);
+  });
+});

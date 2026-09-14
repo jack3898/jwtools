@@ -10,7 +10,7 @@ import type {
   Toolkit,
 } from "./define";
 import { createRandom } from "./random";
-import { uuidV5 } from "./uuid";
+import { sha1, utf8, uuidV5 } from "./uuid";
 
 export const FIXED_SEED = 20_260_703;
 
@@ -28,6 +28,10 @@ export type SeedReport = {
 };
 
 export type ExtendContext = {
+  /**
+   * Derived for this seed from the run seed and the seed's identity, so a
+   * stream seeded from it is independent of every other seed's.
+   */
   readonly seed: number;
   readonly now: Date;
 };
@@ -39,7 +43,7 @@ export type IdContext = {
 };
 
 type BaseRunOptions<X extends object> = {
-  /** Seeds the random stream. Same seed, same rows. */
+  /** Seeds every stream in the run. Same seed, same rows. */
   readonly seed?: number | undefined;
   readonly now?: Date | undefined;
   readonly namespace?: string | undefined;
@@ -53,8 +57,8 @@ type BaseRunOptions<X extends object> = {
   /** Replaces uuid v5 as the id derivation. Must be pure. */
   readonly id?: ((context: IdContext) => string) | undefined;
   /**
-   * Built once per run and spread into every seed's toolkit. Where a faker
-   * instance, seeded from `context.seed`, comes in.
+   * Built once per seed and spread into its toolkit. Where a faker instance,
+   * seeded from `context.seed`, comes in.
    */
   readonly extend?: ((context: ExtendContext) => X) | undefined;
 };
@@ -89,8 +93,6 @@ function createRun<Target, X extends object>(
   const seed = options.seed ?? FIXED_SEED;
   const now = options.now ?? FIXED_NOW;
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
-  const random = createRandom(seed);
-  const extras = options.extend?.({ seed, now });
   const stack: Array<string> = [];
   const links: Array<() => Promise<void>> = [];
   /**
@@ -129,18 +131,21 @@ function createRun<Target, X extends object>(
   const run: Run<X> = {
     nameOf,
 
+    // Each seed draws from its own stream, keyed the way ids are, so its
+    // values survive reordering, new dependencies and other entry points.
     toolkit: (meta): Toolkit & X => {
       const target = targetNameOf(meta);
       const within = meta.namespace ?? namespace;
       const derive = options.id ?? defaultId;
+      const own = streamSeed(seed, target, within);
 
       return Object.assign(
         {
           now,
-          random,
+          random: createRandom(own),
           id: (key: string) => derive({ target, key, namespace: within }),
         },
-        extras,
+        options.extend?.({ seed: own, now }),
       );
     },
 
@@ -250,6 +255,19 @@ function createRun<Target, X extends object>(
 
 function defaultId({ target, key, namespace }: IdContext): string {
   return uuidV5(`${target}:${key}`, namespace);
+}
+
+/**
+ * The first four bytes of a SHA-1 over the same inputs ids use. Hashed
+ * directly rather than through `uuidV5`, since a custom `id` may pair with
+ * a namespace that is not a uuid.
+ */
+function streamSeed(seed: number, target: string, namespace: string): number {
+  const [a = 0, b = 0, c = 0, d = 0] = sha1(
+    utf8(`${seed}:${target}:${namespace}`),
+  );
+
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 }
 
 /** One seed to run, with the overrides for its `defaults`. */

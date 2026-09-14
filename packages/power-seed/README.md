@@ -56,7 +56,7 @@ Three things happened there:
 
 - **`players` pulled `teams` in** by calling `get(teams)`. There is no dependency list to keep in sync with the code. To get the `teams` handle back as well, list it as an entry too.
 - **Every row got a stable id** derived from its seed name and index. Run it again and the same ids are offered, and the adapter keeps the rows already there.
-- **`random.int` drew from a stream seeded once for the run.** The same seed gives the same ratings, every time, on every machine.
+- **`random.int` drew from a stream of this seed's own**, derived from the run seed and the seed's identity. The same seed gives the same ratings, every time, on every machine, whatever else is in the run.
 
 ## Bringing your schema
 
@@ -248,7 +248,7 @@ type Adapter<Target> = {
 
 ## Faker and other extras
 
-The toolkit every seed receives is deliberately small: `now`, `id`, and `random`. Anything richer comes in through `extend`, which runs once per run and is spread into every seed's arguments. That is where a faker instance belongs, seeded from the run so the stream starts fresh every time:
+The toolkit every seed receives is deliberately small: `now`, `id`, and `random`. Anything richer comes in through `extend`, which runs once per seed and is spread into that seed's arguments. That is where a faker instance belongs, seeded from `context.seed`, which is derived for the seed, so its draws are its own:
 
 ```ts
 import { Faker, en } from "@faker-js/faker";
@@ -293,7 +293,7 @@ A run is reproducible when every value derives from the run's inputs. The rules:
 
 - **Draw from `random`, or from something you seeded in `extend`.** Never from `Math.random`.
 - **Derive dates from `now`.** Never from `new Date()`.
-- **Await dependencies in order.** Random draws inside a `Promise.all` resolve in scheduler order. Get what you need, then draw.
+- **Draw in a fixed order within a seed.** Random draws inside a `Promise.all` resolve in scheduler order. Get what you need, then draw. Other seeds cannot interfere: each has its own stream, so a seed's values survive reordering entries, a new dependency, and a different entry point.
 - **Ids never depend on the random stream.** They come from the seed name and row index, so changing the seed changes values but not ids, and growing a list keeps the ids of the rows that were already there.
 
 ```ts
@@ -427,4 +427,4 @@ Entries share one run, so a seed two of them depend on is built once. A reusable
 
 ## Stability
 
-Ids and the random stream are part of the contract. A minor release will not change what a given seed, name, index and namespace derive to, nor what a given `seed` option draws.
+Ids and the random streams are part of the contract. A minor release will not change what a given target, namespace and run seed derive to: neither the ids nor the stream a seed draws from.

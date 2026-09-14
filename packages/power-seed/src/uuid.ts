@@ -24,7 +24,7 @@ function bytesOfUuid(uuid: string): Uint8Array {
 }
 
 /** UTF-8, inline: `TextEncoder` is not part of the ES lib and this has to run anywhere. */
-function utf8(text: string): Uint8Array {
+export function utf8(text: string): Uint8Array {
   const bytes: Array<number> = [];
 
   for (const char of text) {
