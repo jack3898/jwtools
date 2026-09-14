@@ -59,9 +59,23 @@ export type Seed<
   readonly name: string | undefined;
   readonly target: Target;
   readonly namespace: string | undefined;
-  /** Carried so an entry's `config` can be typed from its seeder. */
+  /** Carried so `override` can be typed from it. */
   readonly defaults: C | undefined;
+  /** This seed with overrides for its defaults, ready to plant. */
+  readonly override: (
+    config: Overrides<C>,
+  ) => SeedEntry<Seed<Target, Insert, A, X, C>>;
   readonly resolve: (run: Run<X>) => Promise<Handle<Insert, A>>;
+};
+
+/**
+ * A seed with the overrides for its defaults, from `override`. Planting a
+ * bare seed is the same as planting it with none.
+ */
+export type SeedEntry<S> = {
+  readonly seeder: S;
+  /** Already typed by `override`; a key the seed does not declare never gets here. */
+  readonly config: SeedConfig | undefined;
 };
 
 /** One seeding run. Created by the engine, never by hand. */
@@ -78,7 +92,7 @@ export type Run<X extends object> = {
     id: string,
     values: object,
   ) => Promise<void>;
-  /** The seed's defaults under its entry's overrides, checked when listed. */
+  /** The seed's defaults under its overrides, checked when planted. */
   readonly configOf: (seed: SeedMeta) => SeedConfig;
   /** Resolves a seed once per run, and refuses one that is still building. */
   readonly get: Get<X>;
@@ -138,7 +152,7 @@ export type SeedDefinition<
    * unrelated rows and the run refuses the second.
    */
   readonly namespace?: string | undefined;
-  /** Config an entry may override. Every key must be declared here. */
+  /** Config `override` may change. Every key must be declared here. */
   readonly defaults?: C;
   readonly build: (
     args: BuildArgs<C, X>,
@@ -161,7 +175,7 @@ export type SeedDefinition<
  * Seeds form a tree by asking for each other: what a builder calls `get()` on
  * IS its dependency, so there is no separate list to keep in sync.
  */
-export function defineSeed<
+export function seeder<
   Target,
   Insert extends object,
   C extends SeedConfig,
@@ -179,6 +193,7 @@ export function defineSeed<
     target: definition.target,
     namespace: definition.namespace,
     defaults: definition.defaults,
+    override: (config) => ({ seeder: seed, config }),
     resolve: (run) => {
       const cached = cache.get(run);
 
@@ -198,7 +213,7 @@ export function defineSeed<
     const name = run.nameOf(seed);
     const toolkit = run.toolkit(seed);
     // The run checked and merged this seed's config against its defaults when
-    // it was listed, so what comes back has the defaults' shape.
+    // it was planted, so what comes back has the defaults' shape.
     const args = { ...toolkit, config: run.configOf(seed) as C, get: run.get };
     const built = await definition.build(args);
 

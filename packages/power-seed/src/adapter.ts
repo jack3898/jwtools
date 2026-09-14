@@ -56,13 +56,13 @@ export type Adapter<Target> = {
   ) => Promise<void>;
 };
 
-/** Rows by id, by target. What `memoryAdapter` writes into. */
+/** Rows by id, by target. What `memory` writes into. */
 export type MemoryStore<Target> = Map<
   Target,
   Map<string, Record<string, unknown>>
 >;
 
-export type MemoryAdapterOptions<Target> = {
+export type MemoryOptions<Target> = {
   /**
    * Where rows go. Pass your own to look at what was written; the adapter
    * has no read API of its own, since rows come back through handles.
@@ -83,8 +83,8 @@ export type MemoryAdapterOptions<Target> = {
  * generate object graphs without a database, or test seeds without one. A
  * string target names itself; any other kind needs `name` on the seed.
  */
-export function memoryAdapter<Target = unknown>(
-  options: MemoryAdapterOptions<Target> = {},
+export function memory<Target = unknown>(
+  options: MemoryOptions<Target> = {},
 ): Adapter<Target> {
   const store: MemoryStore<Target> = options.store ?? new Map();
 

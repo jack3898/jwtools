@@ -3,16 +3,16 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { engineSuite, harnessSeeds } from "./engine.suite";
 import {
-  defineSeed as define,
+  seeder as define,
   type MemoryStore,
-  memoryAdapter,
+  memory,
+  plant,
   type SeedConfig,
   type SeedDefinition,
-  seed,
 } from "./index";
 
 /** The README's Zod block, verbatim: pins the row type to the schema's input. */
-function defineSeed<
+function seeder<
   S extends z.ZodObject,
   C extends SeedConfig,
   A extends object,
@@ -40,7 +40,7 @@ const profileSchema = z.object({
 });
 
 const store: MemoryStore<z.ZodObject> = new Map();
-const adapter = memoryAdapter<z.ZodObject>({
+const adapter = memory<z.ZodObject>({
   store,
   parse: (schema, row) => schema.parse(row),
 });
@@ -70,24 +70,22 @@ describe("zod specifics", () => {
       id: z.string().optional(),
       name: z.string().min(3),
     });
-    const tooShort = defineSeed({
+    const tooShort = seeder({
       target: strict,
       name: "tooShort",
       build: () => [{ name: "ab" }],
     });
 
-    await expect(seed(adapter, [{ seeder: tooShort }])).rejects.toThrow(
-      /Too small/,
-    );
+    await expect(plant(adapter, [tooShort])).rejects.toThrow(/Too small/);
   });
 
   it("requires a name, since a schema has none", async () => {
-    const anonymous = defineSeed({
+    const anonymous = seeder({
       target: z.object({ id: z.string().optional() }),
       build: () => [{}],
     });
 
-    await expect(seed(adapter, [{ seeder: anonymous }])).rejects.toThrow(
+    await expect(plant(adapter, [anonymous])).rejects.toThrow(
       "A seed on a target the adapter cannot name must set `name`",
     );
   });
@@ -120,20 +118,16 @@ describe("zod specifics", () => {
     const names = (rows: ReadonlyArray<{ row: { name: string } }>) =>
       rows.map(({ row }) => row.name);
 
-    const first = (
-      await seed(adapter, [{ seeder: people }], { extend })
-    ).handle(people);
+    const first = (await plant(adapter, [people], { extend })).handle(people);
 
     store.clear();
 
-    const again = (
-      await seed(adapter, [{ seeder: people }], { extend })
-    ).handle(people);
+    const again = (await plant(adapter, [people], { extend })).handle(people);
 
     store.clear();
 
     const other = (
-      await seed(adapter, [{ seeder: people }], {
+      await plant(adapter, [people], {
         extend,
         seed: 2,
       })

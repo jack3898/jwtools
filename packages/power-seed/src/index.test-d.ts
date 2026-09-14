@@ -9,13 +9,13 @@
 import { expectTypeOf } from "expect-type";
 import {
   type ConfigOf,
-  defineSeed,
   type HandleOf,
-  memoryAdapter,
+  memory,
+  plant,
   type Row,
   type SeedConfig,
   type SeedDefinition,
-  seed,
+  seeder,
 } from ".";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
@@ -23,9 +23,9 @@ import {
 const describe = (_name: string, fn: () => void): void => void fn;
 const it = (_name: string, fn: () => void): void => void fn;
 
-const adapter = memoryAdapter<string>();
+const adapter = memory<string>();
 
-const people = defineSeed({
+const people = seeder({
   target: "people",
   defaults: { count: 2, ages: { min: 18, max: 65 } },
   build: ({ config, random }) =>
@@ -38,7 +38,7 @@ const people = defineSeed({
   }),
 });
 
-describe("defineSeed", () => {
+describe("seeder", () => {
   it("infers the row shape from what build returns", () => {
     expectTypeOf<HandleOf<typeof people>>().toMatchTypeOf<{
       names: () => Array<string>;
@@ -55,7 +55,7 @@ describe("defineSeed", () => {
   });
 
   it("types the handle a builder gets from a dependency", () => {
-    defineSeed({
+    seeder({
       target: "pets",
       build: async ({ get }) => {
         const owners = await get(people);
@@ -76,7 +76,7 @@ describe("defineSeed", () => {
       C extends SeedConfig,
       A extends object,
     >(definition: SeedDefinition<S, S["shape"], C, A>) {
-      return defineSeed(definition);
+      return seeder(definition);
     }
 
     const schema: Schema<{ title: string }> = { shape: { title: "" } };
@@ -99,7 +99,7 @@ describe("extras", () => {
     A extends object,
     Insert extends object,
   >(definition: SeedDefinition<string, Insert, C, A, WithFaker>) {
-    return defineSeed(definition);
+    return seeder(definition);
   }
 
   const words = defineWithFaker({
@@ -111,10 +111,10 @@ describe("extras", () => {
 
   it("must be supplied when a seed needs them", () => {
     // @ts-expect-error extend is required when the seed needs extras
-    void seed(adapter, [{ seeder: words }]);
-    void seed(adapter, [{ seeder: words }], { extend });
-    void seed(adapter, [{ seeder: people }], { extend });
-    void seed(adapter, [{ seeder: people }]);
+    void plant(adapter, [words]);
+    void plant(adapter, [words], { extend });
+    void plant(adapter, [people], { extend });
+    void plant(adapter, [people]);
   });
 
   it("flow down the tree but never up", () => {
@@ -123,7 +123,7 @@ describe("extras", () => {
       build: async ({ get }) => [{ n: (await get(people)).names().length }],
     });
 
-    defineSeed({
+    seeder({
       target: "notFine",
       build: async ({ get }) => {
         // @ts-expect-error a seed needing extras cannot be pulled from one without them
@@ -135,38 +135,41 @@ describe("extras", () => {
   });
 
   it("are checked across every seed in seed", () => {
-    void seed(adapter, [{ seeder: people }, { seeder: words }], { extend });
+    void plant(adapter, [people, words], { extend });
     // @ts-expect-error extend is required when any seed needs extras
-    void seed(adapter, [{ seeder: people }, { seeder: words }]);
+    void plant(adapter, [people, words]);
   });
 });
 
 describe("seed", () => {
-  it("hands back a typed handle for any listed seed", async () => {
-    const result = await seed(adapter, [{ seeder: people }]);
+  it("hands back a typed handle for any planted seed", async () => {
+    const result = await plant(adapter, [people]);
 
     expectTypeOf(result.handle(people).names()).toEqualTypeOf<Array<string>>();
     expectTypeOf(result.handle(people).first().row.age).toEqualTypeOf<number>();
-    // @ts-expect-error only a listed seed has a handle
+    // @ts-expect-error only a planted seed has a handle
     result.handle(words);
   });
 
-  it("types each entry's config from its seeder", () => {
-    void seed(adapter, [{ seeder: people, config: { count: 1 } }]);
-    void seed(adapter, [{ seeder: people, config: { ages: { max: 40 } } }]);
+  it("types overrides from the seed", async () => {
+    const bed = await plant(adapter, [people.override({ count: 1 })]);
+
+    // Planted with overrides, found by the seed itself.
+    expectTypeOf(bed.handle(people).names()).toEqualTypeOf<Array<string>>();
+    void plant(adapter, [people.override({ ages: { max: 40 } })]);
     // @ts-expect-error a key the seed does not declare
-    void seed(adapter, [{ seeder: people, config: { cuont: 1 } }]);
+    people.override({ cuont: 1 });
     // @ts-expect-error the wrong type for a declared key
-    void seed(adapter, [{ seeder: people, config: { count: "1" } }]);
+    people.override({ count: "1" });
   });
 });
 
 describe("adapters", () => {
   it("must match the seeds' target type", () => {
-    const objects = memoryAdapter<{ readonly table: string }>();
+    const objects = memory<{ readonly table: string }>();
 
     // @ts-expect-error a seed on a string target cannot run through an adapter for objects
-    void seed(objects, [{ seeder: people }]);
+    void plant(objects, [people]);
   });
 
   it("expose nothing beyond the adapter contract", () => {

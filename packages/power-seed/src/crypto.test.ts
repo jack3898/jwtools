@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sha1, uuidV5 } from "./uuid";
+import { sha1, uuidV5 } from "./crypto";
 
 const DNS = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 

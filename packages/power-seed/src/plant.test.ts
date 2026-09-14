@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Adapter } from "./adapter";
-import { type MemoryStore, memoryAdapter } from "./adapter";
-import { defineSeed } from "./define";
-import { seed } from "./run";
+import { type MemoryStore, memory } from "./adapter";
+import { plant } from "./plant";
+import { seeder } from "./seeder";
 
 /** A stub whose insert claims to have dropped the last row offered. */
 function droppingAdapter(present: boolean): Adapter<string> {
@@ -17,24 +17,20 @@ function droppingAdapter(present: boolean): Adapter<string> {
   };
 }
 
-const pair = defineSeed({
+const pair = seeder({
   target: "things",
   build: () => [{ n: 1 }, { n: 2 }],
 });
 
 describe("the insert check", () => {
   it("rejects rows the adapter reports as dropped and absent", async () => {
-    await expect(
-      seed(droppingAdapter(true), [{ seeder: pair }]),
-    ).rejects.toThrow(
+    await expect(plant(droppingAdapter(true), [pair])).rejects.toThrow(
       'Seed "things" offered 2 rows to things but 1 are not in it',
     );
   });
 
   it("trusts the adapter when it cannot say which rows are present", async () => {
-    await expect(
-      seed(droppingAdapter(false), [{ seeder: pair }]),
-    ).resolves.toBeDefined();
+    await expect(plant(droppingAdapter(false), [pair])).resolves.toBeDefined();
   });
 
   it("trusts an adapter that cannot count", async () => {
@@ -45,22 +41,22 @@ describe("the insert check", () => {
       update: () => Promise.resolve(),
     };
 
-    await expect(seed(adapter, [{ seeder: pair }])).resolves.toBeDefined();
+    await expect(plant(adapter, [pair])).resolves.toBeDefined();
   });
 });
 
 describe("dry runs", () => {
   it("touch neither insert nor update", async () => {
-    const adapter = memoryAdapter<string>();
+    const adapter = memory<string>();
     const insert = vi.spyOn(adapter, "insert");
     const update = vi.spyOn(adapter, "update");
-    const linked = defineSeed({
+    const linked = seeder({
       target: "linked",
       build: () => [{ value: 1 }],
       link: ({ rows, update }) => update(rows[0]?.id ?? "", { value: 2 }),
     });
 
-    await seed(adapter, [{ seeder: linked }], { dryRun: true });
+    await plant(adapter, [linked], { dryRun: true });
 
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
@@ -69,21 +65,21 @@ describe("dry runs", () => {
 
 describe("ids", () => {
   it("lets a row bring its own", async () => {
-    const adapter = memoryAdapter<string>();
-    const named = defineSeed({
+    const adapter = memory<string>();
+    const named = seeder({
       target: "named",
       build: () => [{ id: "chosen", value: 1 }, { value: 2 }],
     });
-    const handle = (await seed(adapter, [{ seeder: named }])).handle(named);
+    const handle = (await plant(adapter, [named])).handle(named);
 
     expect(handle.all[0]?.id).toBe("chosen");
     expect(handle.all[1]?.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("can derive through a custom function", async () => {
-    const adapter = memoryAdapter<string>();
+    const adapter = memory<string>();
     const handle = (
-      await seed(adapter, [{ seeder: pair }], {
+      await plant(adapter, [pair], {
         id: ({ target, key, namespace }) => `${namespace}/${target}/${key}`,
         namespace: "ns",
       })
@@ -96,31 +92,27 @@ describe("ids", () => {
   });
 
   it("are refused when another seed in the run already minted them", async () => {
-    const adapter = memoryAdapter<string>();
-    const one = defineSeed({ target: "things", build: () => [{ n: 1 }] });
-    const two = defineSeed({ target: "things", build: () => [{ n: 2 }] });
+    const adapter = memory<string>();
+    const one = seeder({ target: "things", build: () => [{ n: 1 }] });
+    const two = seeder({ target: "things", build: () => [{ n: 2 }] });
 
-    await expect(
-      seed(adapter, [{ seeder: one }, { seeder: two }], { dryRun: true }),
-    ).rejects.toThrow(
+    await expect(plant(adapter, [one, two], { dryRun: true })).rejects.toThrow(
       /^Seed "things" minted id "[0-9a-f-]{36}" for things, which this run already wrote/,
     );
   });
 
   it("derive from the raw target name, so a renamed seed keeps them", async () => {
-    const adapter = memoryAdapter<string>();
-    const plain = (
-      await seed(adapter, [{ seeder: pair }], { dryRun: true })
-    ).handle(pair);
-    const renamedSeed = defineSeed({
+    const adapter = memory<string>();
+    const plain = (await plant(adapter, [pair], { dryRun: true })).handle(pair);
+    const renamedSeed = seeder({
       target: "things",
       name: "renamed",
       build: () => [{ n: 1 }],
     });
     const renamed = (
-      await seed(adapter, [{ seeder: renamedSeed }], { dryRun: true })
+      await plant(adapter, [renamedSeed], { dryRun: true })
     ).handle(renamedSeed);
-    const renamedAgain = defineSeed({
+    const renamedAgain = seeder({
       target: "things",
       name: "renamed",
       build: () => [{ n: 9 }],
@@ -130,7 +122,7 @@ describe("ids", () => {
     // so the ids do too. Only the target half is shared.
     expect(plain.first().id).not.toBe(renamed.first().id);
     expect(renamed.first().id).toBe(
-      (await seed(adapter, [{ seeder: renamedAgain }], { dryRun: true }))
+      (await plant(adapter, [renamedAgain], { dryRun: true }))
         .handle(renamedAgain)
         .first().id,
     );
@@ -140,9 +132,9 @@ describe("ids", () => {
 describe("links", () => {
   it("drain in waves, so a link may pull in a seed with a link of its own", async () => {
     const store: MemoryStore<string> = new Map();
-    const adapter = memoryAdapter<string>({ store });
+    const adapter = memory<string>({ store });
     const order: Array<string> = [];
-    const inner = defineSeed({
+    const inner = seeder({
       target: "inner",
       build: () => [{ value: 1 }],
       link: () => {
@@ -151,7 +143,7 @@ describe("links", () => {
         return Promise.resolve();
       },
     });
-    const outer = defineSeed({
+    const outer = seeder({
       target: "outer",
       build: () => [{ value: 1 }],
       link: async ({ get }) => {
@@ -160,7 +152,7 @@ describe("links", () => {
       },
     });
 
-    await seed(adapter, [{ seeder: outer }]);
+    await plant(adapter, [outer]);
 
     expect(order).toEqual(["outer link", "inner link"]);
     expect(store.get("inner")?.size).toBe(1);
@@ -168,14 +160,14 @@ describe("links", () => {
 });
 
 describe("handles", () => {
-  const teams = defineSeed({
+  const teams = seeder({
     target: "teams",
     build: () => [{ name: "Red" }, { name: "Blue" }],
     accessors: ({ rows }) => ({
       names: () => rows.map((team) => team.row.name),
     }),
   });
-  const players = defineSeed({
+  const players = seeder({
     target: "players",
     build: async ({ get }) => {
       const { all } = await get(teams);
@@ -195,12 +187,9 @@ describe("handles", () => {
 
   it("stay live: a link's update shows in rows and accessors", async () => {
     const store: MemoryStore<string> = new Map();
-    const adapter = memoryAdapter<string>({ store });
+    const adapter = memory<string>({ store });
 
-    const result = await seed(adapter, [
-      { seeder: players },
-      { seeder: teams },
-    ]);
+    const result = await plant(adapter, [players, teams]);
     const playerHandle = result.handle(players);
     const teamHandle = result.handle(teams);
 
@@ -217,10 +206,10 @@ describe("handles", () => {
 
   it("stay live on a dry run too, with nothing written", async () => {
     const store: MemoryStore<string> = new Map();
-    const adapter = memoryAdapter<string>({ store });
+    const adapter = memory<string>({ store });
 
     const teamHandle = (
-      await seed(adapter, [{ seeder: players }, { seeder: teams }], {
+      await plant(adapter, [players, teams], {
         dryRun: true,
       })
     ).handle(teams);
@@ -232,9 +221,9 @@ describe("handles", () => {
 
 describe("config", () => {
   it("merges nested objects and replaces arrays", async () => {
-    const adapter = memoryAdapter<string>();
+    const adapter = memory<string>();
     const seen: Array<unknown> = [];
-    const configured = defineSeed({
+    const configured = seeder({
       target: "configured",
       defaults: { range: { min: 1, max: 5 }, weights: [1, 2, 3] },
       build: ({ config }) => {
@@ -244,38 +233,38 @@ describe("config", () => {
       },
     });
 
-    await seed(adapter, [
-      { seeder: configured, config: { range: { max: 9 }, weights: [7] } },
+    await plant(adapter, [
+      configured.override({ range: { max: 9 }, weights: [7] }),
     ]);
 
     expect(seen).toEqual([{ range: { min: 1, max: 9 }, weights: [7] }]);
   });
 
-  it("rejects a seed listed twice, since it can only take one config", async () => {
-    const adapter = memoryAdapter<string>();
-    const things = defineSeed({ target: "things", build: () => [] });
+  it("rejects a seed planted twice, since it can only take one config", async () => {
+    const adapter = memory<string>();
+    const things = seeder({ target: "things", build: () => [] });
 
-    await expect(
-      seed(adapter, [{ seeder: things }, { seeder: things }]),
-    ).rejects.toThrow('Seed "things" is listed twice');
+    await expect(plant(adapter, [things, things])).rejects.toThrow(
+      'Seed "things" is planted twice',
+    );
   });
 });
 
 describe("streams", () => {
   const draw = (target: string) =>
-    defineSeed({
+    seeder({
       target,
       build: ({ random }) => [
         { value: random.int({ min: 0, max: 1_000_000 }) },
       ],
     });
-  const noise = defineSeed({
+  const noise = seeder({
     target: "noise",
     build: ({ random }) =>
       Array.from({ length: 10 }, () => ({ value: random.float() })),
   });
   const things = draw("things");
-  const dependent = defineSeed({
+  const dependent = seeder({
     target: "dependent",
     build: async ({ get, random }) => {
       await get(noise);
@@ -285,37 +274,35 @@ describe("streams", () => {
   });
 
   it("give a seed the same values whatever else is in the run", async () => {
-    const adapter = memoryAdapter<string>();
+    const adapter = memory<string>();
     const options = { dryRun: true };
     const value = (handle: { first: () => { row: { value: number } } }) =>
       handle.first().row.value;
 
-    const alone = (await seed(adapter, [{ seeder: things }], options)).handle(
+    const alone = (await plant(adapter, [things], options)).handle(things);
+    const after = (await plant(adapter, [noise, things], options)).handle(
       things,
     );
-    const after = (
-      await seed(adapter, [{ seeder: noise }, { seeder: things }], options)
-    ).handle(things);
-    const before = (
-      await seed(adapter, [{ seeder: things }, { seeder: noise }], options)
-    ).handle(things);
+    const before = (await plant(adapter, [things, noise], options)).handle(
+      things,
+    );
 
     expect(value(after)).toBe(value(alone));
     expect(value(before)).toBe(value(alone));
     // A seed that draws after pulling in a noisy dependency is unaffected too.
-    const viaNoise = (
-      await seed(adapter, [{ seeder: dependent }], options)
-    ).handle(dependent);
+    const viaNoise = (await plant(adapter, [dependent], options)).handle(
+      dependent,
+    );
     const dependentAlone = draw("dependent");
     const sameTargetAlone = (
-      await seed(adapter, [{ seeder: dependentAlone }], options)
+      await plant(adapter, [dependentAlone], options)
     ).handle(dependentAlone);
 
     expect(value(viaNoise)).toBe(value(sameTargetAlone));
   });
 
   it("hand extend a seed of the seed's own, stable across runs", async () => {
-    const adapter = memoryAdapter<string>();
+    const adapter = memory<string>();
     const seen: Array<number> = [];
     const extend = ({ seed: own }: { seed: number }) => {
       seen.push(own);
@@ -323,8 +310,8 @@ describe("streams", () => {
       return {};
     };
 
-    await seed(adapter, [{ seeder: things }, { seeder: noise }], { extend });
-    await seed(adapter, [{ seeder: noise }, { seeder: things }], { extend });
+    await plant(adapter, [things, noise], { extend });
+    await plant(adapter, [noise, things], { extend });
 
     const [things1, noise1, noise2, things2] = seen;
 

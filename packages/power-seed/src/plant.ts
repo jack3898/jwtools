@@ -1,15 +1,15 @@
 import type { Adapter } from "./adapter";
+import { sha1, utf8, uuidV5 } from "./crypto";
+import { createRandom } from "./random";
 import type {
-  ConfigOf,
   HandleOf,
   Run,
   Seed,
   SeedConfig,
+  SeedEntry,
   SeedMeta,
   Toolkit,
-} from "./define";
-import { createRandom } from "./random";
-import { sha1, utf8, uuidV5 } from "./uuid";
+} from "./seeder";
 
 export const FIXED_SEED = 20_260_703;
 
@@ -317,61 +317,68 @@ function deepMerge(defaults: SeedConfig, overrides: SeedConfig): SeedConfig {
   return merged;
 }
 
-/** One seed to run, with the overrides for its `defaults`. */
-export type SeedEntry<S> = {
-  readonly seeder: S;
-  /** Typed from the seeder. A key it does not declare is an error. */
-  readonly config?: ConfigOf<S> | undefined;
-};
+/** What may go in the ground: a seed as is, or one with overrides. */
+type Plantable<Target, X extends object> =
+  | Seed<Target, object, object, X>
+  | SeedEntry<Seed<Target, object, object, X>>;
 
-/** What `seed` resolves to: a handle for any seed that was listed. */
-export type SeedResult<S extends ReadonlyArray<unknown>> = {
-  readonly handle: <T extends S[number]>(seeder: T) => HandleOf<T>;
+/** The seed behind a planting, whether it went in bare or with overrides. */
+export type Planted<P> = P extends SeedEntry<infer S> ? S : P;
+
+/** What `plant` grows: a handle for any seed that was planted. */
+export type Bed<P extends ReadonlyArray<unknown>> = {
+  readonly handle: <T extends Planted<P[number]>>(seeder: T) => HandleOf<T>;
 };
 
 /**
- * Seed every entry, and everything each asks for, against one run. Entries
- * share what is beneath them, so a seed two of them depend on is built once.
- * A seed reached only through another is configured by listing it too.
+ * Plant every seed, and everything each asks for, in one bed. Seeds share
+ * what is beneath them, so a seed two of them depend on is built once. A
+ * seed reached only through another is configured by planting it too.
  */
-export async function seed<
+export async function plant<
   Target,
-  const S extends ReadonlyArray<Seed<NoInfer<Target>, object, object, X>>,
+  P extends ReadonlyArray<Plantable<NoInfer<Target>, X>>,
   X extends object = object,
 >(
   adapter: Adapter<Target>,
-  entries: { readonly [K in keyof S]: SeedEntry<S[K]> },
+  plantings: P,
   ...args: RunArgs<X>
-): Promise<SeedResult<S>> {
+): Promise<Bed<P>> {
   const [options] = args;
   const configs = new Map<object, SeedConfig>();
   const shared = createRun(adapter, options ?? {}, configs);
+  // Read through the constraint, so a bare seed and an override tell apart.
+  const list: ReadonlyArray<Plantable<Target, X>> = plantings;
+  const seeders: Array<Seed<Target, object, object, X>> = [];
 
-  // Every listing mistake is caught here, before anything is inserted.
-  for (const { seeder, config } of entries) {
+  // Every planting mistake is caught here, before anything is inserted.
+  for (const planting of list) {
+    const { seeder, config } =
+      "seeder" in planting ? planting : { seeder: planting, config: undefined };
     const name = shared.nameOf(seeder);
 
     if (configs.has(seeder)) {
-      throw new Error(`Seed "${name}" is listed twice`);
+      throw new Error(`Seed "${name}" is planted twice`);
     }
 
     configs.set(seeder, resolveConfig(name, seeder.defaults, config ?? {}));
+    seeders.push(seeder);
   }
 
   const handles = new Map<object, unknown>();
 
-  for (const { seeder } of entries) {
+  for (const seeder of seeders) {
     handles.set(seeder, await shared.get(seeder));
   }
 
   await shared.runLinks();
 
   return {
-    handle: <T extends S[number]>(seeder: T) => {
+    handle: <T extends Planted<P[number]>>(seeder: T) => {
       const handle = handles.get(seeder);
 
       if (handle === undefined) {
-        throw new Error(`Seed "${shared.nameOf(seeder)}" was not listed`);
+        throw new Error(`Seed "${shared.nameOf(seeder)}" was not planted`);
       }
 
       // Stored under the seed it came from, so it is that seed's handle.

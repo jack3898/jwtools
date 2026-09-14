@@ -4,8 +4,8 @@
  */
 import { en, Faker } from "@faker-js/faker";
 import {
-  defineSeed as define,
-  memoryAdapter,
+  seeder as define,
+  memory,
   type SeedConfig,
   type SeedDefinition,
 } from "@jack3898/power-seed";
@@ -14,7 +14,7 @@ import type { z } from "zod";
 /** What every seed gets on top of the toolkit. Supplied by `extend` per run. */
 export type Extras = { faker: Faker };
 
-export function defineSeed<
+export function seeder<
   S extends z.ZodObject,
   C extends SeedConfig,
   A extends object,
@@ -22,7 +22,7 @@ export function defineSeed<
   return define(definition);
 }
 
-export const adapter = memoryAdapter<z.ZodObject>({
+export const adapter = memory<z.ZodObject>({
   // Every row is validated on the way in. Try making `pages` 0 in a factory.
   parse: (schema, row) => schema.parse(row),
 });
