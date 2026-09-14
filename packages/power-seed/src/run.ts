@@ -104,6 +104,12 @@ function createRun<Target, X extends object>(
   /** Every seed name this run resolved, for the unused-config check. */
   const seen = new Set<string>();
   const links: Array<() => Promise<void>> = [];
+  /**
+   * The row objects handles hold, by id, by target. A link's update lands on
+   * these too, so a handle never goes stale. Kept in a dry run as well: the
+   * handles it computes must match what a real run's would say.
+   */
+  const held = new Map<unknown, Map<string, object>>();
 
   // The engine carries targets as `unknown` so seeds on different concrete
   // targets can depend on each other. The adapter is the one place that
@@ -154,6 +160,14 @@ function createRun<Target, X extends object>(
     // Ignoring conflicts is what makes a run repeatable: ids derive from
     // identity, so a row already there is the same row.
     insert: async (meta, name, rows) => {
+      const heldRows = held.get(meta.target) ?? new Map<string, object>();
+
+      held.set(meta.target, heldRows);
+
+      for (const { id, values } of rows) {
+        heldRows.set(id, values);
+      }
+
       if (options.dryRun) {
         return;
       }
@@ -184,11 +198,15 @@ function createRun<Target, X extends object>(
     },
 
     update: async (target, id, values) => {
-      if (options.dryRun) {
-        return;
+      if (!options.dryRun) {
+        await adapter.update(target as Target, id, { ...values });
       }
 
-      await adapter.update(target as Target, id, { ...values });
+      const row = held.get(target)?.get(id);
+
+      if (row) {
+        Object.assign(row, values);
+      }
     },
 
     defer: (link) => {

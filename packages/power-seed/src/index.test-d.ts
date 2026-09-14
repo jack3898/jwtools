@@ -162,15 +162,10 @@ describe("adapters", () => {
     void seedOne(objects, people);
   });
 
-  it("types stored rows from the seed, not the target", () => {
-    const [person] = adapter.rows(people);
-
-    expectTypeOf(person?.id).toEqualTypeOf<string | undefined>();
-    expectTypeOf(person?.name).toEqualTypeOf<string | undefined>();
-    expectTypeOf(person?.age).toEqualTypeOf<number | undefined>();
-    // @ts-expect-error only the columns build returned are known
-    person?.email;
-    // @ts-expect-error a target name is not a seed
-    adapter.rows("people");
+  it("expose nothing beyond the adapter contract", () => {
+    // @ts-expect-error rows come back through handles, not the adapter
+    adapter.rows;
+    // @ts-expect-error the caller's own store is the only way to inspect it
+    adapter.clear;
   });
 });

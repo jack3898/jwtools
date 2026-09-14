@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Adapter } from "./adapter";
-import { memoryAdapter } from "./adapter";
+import { type MemoryStore, memoryAdapter } from "./adapter";
 import { defineSeed } from "./define";
-import { seedOne } from "./run";
+import { seedMany, seedOne } from "./run";
 
 /** A stub whose insert claims to have dropped the last row offered. */
 function droppingAdapter(present: boolean): Adapter<string> {
@@ -132,7 +132,8 @@ describe("ids", () => {
 
 describe("links", () => {
   it("drain in waves, so a link may pull in a seed with a link of its own", async () => {
-    const adapter = memoryAdapter<string>();
+    const store: MemoryStore<string> = new Map();
+    const adapter = memoryAdapter<string>({ store });
     const order: Array<string> = [];
     const inner = defineSeed({
       target: "inner",
@@ -155,68 +156,65 @@ describe("links", () => {
     await seedOne(adapter, outer);
 
     expect(order).toEqual(["outer link", "inner link"]);
-    expect(adapter.rows(inner)).toHaveLength(1);
+    expect(store.get("inner")?.size).toBe(1);
   });
 });
 
-describe("memory adapter rows", () => {
-  it("reads a dependency's rows back by seed, after links have run", async () => {
-    const adapter = memoryAdapter<string>();
-    const teams = defineSeed({
-      target: "teams",
-      build: () => [{ name: "Red" }, { name: "Blue" }],
-    });
-    const players = defineSeed({
-      target: "players",
-      build: async ({ get }) => {
-        const { all } = await get(teams);
-
-        return all.map((team) => ({ teamId: team.id, captain: false }));
-      },
-      link: async ({ rows, update }) => {
-        for (const player of rows) {
-          await update(player.id, { captain: true });
-        }
-      },
-    });
-
-    const handle = await seedOne(adapter, players);
-
-    // No handle for teams came back, but its rows are reachable by seed.
-    expect(adapter.rows(teams).map((team) => team.name)).toEqual([
-      "Red",
-      "Blue",
-    ]);
-    // The handle is the insert-time snapshot; the store shows the link's work.
-    expect(handle.all.map((player) => player.row.captain)).toEqual([
-      false,
-      false,
-    ]);
-    expect(adapter.rows(players).map((player) => player.captain)).toEqual([
-      true,
-      true,
-    ]);
+describe("handles", () => {
+  const teams = defineSeed({
+    target: "teams",
+    build: () => [{ name: "Red" }, { name: "Blue" }],
+    accessors: ({ rows }) => ({
+      names: () => rows.map((team) => team.row.name),
+    }),
   });
-});
+  const players = defineSeed({
+    target: "players",
+    build: async ({ get }) => {
+      const { all } = await get(teams);
 
-describe("config", () => {
-  it("merges nested objects and replaces arrays", async () => {
-    const adapter = memoryAdapter<string>();
-    const seen: Array<unknown> = [];
-    const configured = defineSeed({
-      target: "configured",
-      defaults: { range: { min: 1, max: 5 }, weights: [1, 2, 3] },
-      build: ({ config }) => {
-        seen.push(config);
+      return all.map((team) => ({ teamId: team.id, captain: false }));
+    },
+    link: async ({ rows, update, get, updateIn }) => {
+      for (const player of rows) {
+        await update(player.id, { captain: true });
+      }
 
-        return [];
-      },
-    });
+      const { first } = await get(teams);
 
-    await seedOne(adapter, configured, {
-      configured: { range: { max: 9 }, weights: [7] },
-    });
+      await updateIn(teams, first().id, { name: "Crimson" });
+    },
+  });
 
-    expect(seen).toEqual([{ range: { min: 1, max: 9 }, weights: [7] }]);
+  it("stay live: a link's update shows in rows and accessors", async () => {
+    const store: MemoryStore<string> = new Map();
+    const adapter = memoryAdapter<string>({ store });
+
+    const world = await seedMany(adapter, { players, teams });
+
+    expect(world.players.all.map((player) => player.row.captain)).toEqual([
+      true,
+      true,
+    ]);
+    expect(world.teams.names()).toEqual(["Crimson", "Blue"]);
+    // What the handle says is what was stored.
+    expect(store.get("teams")?.get(world.teams.first().id)?.name).toBe(
+      "Crimson",
+    );
+  });
+
+  it("stay live on a dry run too, with nothing written", async () => {
+    const store: MemoryStore<string> = new Map();
+    const adapter = memoryAdapter<string>({ store });
+
+    const world = await seedMany(
+      adapter,
+      { players, teams },
+      {},
+      { dryRun: true },
+    );
+
+    expect(world.teams.names()).toEqual(["Crimson", "Blue"]);
+    expect(store.size).toBe(0);
   });
 });

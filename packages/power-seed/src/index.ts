@@ -1,7 +1,7 @@
 export type {
   Adapter,
-  MemoryAdapter,
   MemoryAdapterOptions,
+  MemoryStore,
   StampContext,
 } from "./adapter";
 export { memoryAdapter } from "./adapter";

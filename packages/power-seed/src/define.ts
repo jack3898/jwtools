@@ -21,6 +21,7 @@ export type Row<Insert extends object> = {
 };
 
 export type Handle<Insert extends object, A extends object> = A & {
+  /** Live: what a link sets through `update` or `updateIn` shows here. */
   readonly all: ReadonlyArray<Row<Insert>>;
   /** Throws rather than hand back an undefined that lands as a null FK. */
   readonly first: () => Row<Insert>;

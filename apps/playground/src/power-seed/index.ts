@@ -1,4 +1,4 @@
-import { defineSeed, memoryAdapter, seedOne } from "@jack3898/power-seed";
+import { defineSeed, memoryAdapter, seedMany } from "@jack3898/power-seed";
 
 const teams = defineSeed({
   target: "teams",
@@ -26,6 +26,11 @@ const players = defineSeed({
 });
 
 const adapter = memoryAdapter<string>();
-const handle = await seedOne(adapter, players, { players: { perTeam: 2 } });
+const world = await seedMany(
+  adapter,
+  { players, teams },
+  { players: { perTeam: 2 } },
+);
 
-console.log(adapter.rows(teams));
+console.log(world.teams.byName("Red"));
+console.log(world.players.all);

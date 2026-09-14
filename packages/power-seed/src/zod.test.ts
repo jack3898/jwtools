@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ADJECTIVES, engineSuite, NOUNS } from "./engine.suite";
 import {
   defineSeed as define,
+  type MemoryStore,
   memoryAdapter,
   type SeedConfig,
   type SeedDefinition,
@@ -38,7 +39,9 @@ const profileSchema = z.object({
   bio: z.string(),
 });
 
+const store: MemoryStore<z.ZodObject> = new Map();
 const adapter = memoryAdapter<z.ZodObject>({
+  store,
   parse: (schema, row) => schema.parse(row),
 });
 
@@ -114,9 +117,10 @@ engineSuite("zod schemas in memory", {
   authors,
   books,
   profiles,
-  rows: (seed) => Promise.resolve(adapter.rows(seed)),
+  rows: (seed) =>
+    Promise.resolve([...(store.get(seed.target)?.values() ?? [])]),
   reset: () => {
-    adapter.clear();
+    store.clear();
 
     return Promise.resolve();
   },
@@ -178,11 +182,11 @@ describe("zod specifics", () => {
 
     const first = await seedOne(adapter, people, {}, { extend });
 
-    adapter.clear();
+    store.clear();
 
     const again = await seedOne(adapter, people, {}, { extend });
 
-    adapter.clear();
+    store.clear();
 
     const other = await seedOne(adapter, people, {}, { extend, seed: 2 });
 

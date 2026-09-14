@@ -48,12 +48,11 @@ const adapter = memoryAdapter<string>();
 const handle = await seedOne(adapter, players, { players: { perTeam: 2 } });
 
 handle.all; // every player row, with its id
-adapter.rows(teams); // seeded on the way, because players asked for it
 ```
 
 Three things happened there:
 
-- **`players` pulled `teams` in** by calling `get(teams)`. There is no dependency list to keep in sync with the code.
+- **`players` pulled `teams` in** by calling `get(teams)`. There is no dependency list to keep in sync with the code. To get the `teams` handle back as well, ask for both with `seedMany`.
 - **Every row got a stable id** derived from its seed name and index. Run it again and the same ids are offered, and the adapter keeps the rows already there.
 - **`random.int` drew from a stream seeded once for the run.** The same seed gives the same ratings, every time, on every machine.
 
@@ -243,7 +242,7 @@ type Adapter<Target> = {
 };
 ```
 
-`memoryAdapter()` ships in the box. It keeps rows in a `Map` keyed by target identity, names string targets after themselves, and takes an optional `parse` hook. Use it to generate object graphs with no database at all, or to unit test seeds without one. `rows(seed)` hands back what is stored against that seed's target, typed as the seed's rows and reflecting anything `link` set, which a handle's `all` does not.
+`memoryAdapter()` ships in the box. It keeps rows in a `Map` keyed by target identity, names string targets after themselves, and takes an optional `parse` hook. Use it to generate object graphs with no database at all, or to unit test seeds without one. It has no read API: rows come back through handles. A test that wants to look at storage passes its own `store` map in and reads that.
 
 ## Faker and other extras
 
@@ -325,7 +324,7 @@ Nested objects merge, so `{ ages: { max: 40 } }` keeps the default `min`. Arrays
 
 ## Handles and accessors
 
-Every seed resolves to a handle: the rows it wrote, a `first()` that throws rather than hand back an undefined that lands as a null foreign key, and whatever `accessors` defines on top:
+Every seed resolves to a handle: the rows it wrote, a `first()` that throws rather than hand back an undefined that lands as a null foreign key, and whatever `accessors` defines on top. Handles are live: what a link sets through `update` or `updateIn` shows in `all`, `first()` and the accessors.
 
 ```ts
 const users = defineSeed({

@@ -1,5 +1,3 @@
-import type { Seed } from "./define";
-
 /** What the engine stamps on every row before the seed's own columns. */
 export type StampContext = {
   readonly id: string;
@@ -54,7 +52,18 @@ export type Adapter<Target> = {
   ) => Promise<void>;
 };
 
+/** Rows by id, by target. What `memoryAdapter` writes into. */
+export type MemoryStore<Target> = Map<
+  Target,
+  Map<string, Record<string, unknown>>
+>;
+
 export type MemoryAdapterOptions<Target> = {
+  /**
+   * Where rows go. Pass your own to look at what was written; the adapter
+   * has no read API of its own, since rows come back through handles.
+   */
+  readonly store?: MemoryStore<Target>;
   /** Defaults to the target itself when it is a string, otherwise `undefined`. */
   readonly nameOf?: (target: Target) => string | undefined;
   /**
@@ -68,28 +77,14 @@ export type MemoryAdapterOptions<Target> = {
   readonly stamp?: (context: StampContext) => Record<string, unknown>;
 };
 
-export type MemoryAdapter<Target> = Adapter<Target> & {
-  /**
-   * Rows stored against a seed's target, in insertion order, typed as that
-   * seed's rows. Reads the store as it stands, so unlike a handle's `all` it
-   * shows what `link` set. Two seeds that share a target see each other's
-   * rows here.
-   */
-  readonly rows: <Insert extends object, A extends object>(
-    seed: Seed<Target, Insert, A, never>,
-  ) => ReadonlyArray<{ readonly id: string } & Insert>;
-  /** Forget every row. */
-  readonly clear: () => void;
-};
-
 /**
  * Keeps rows in memory, keyed by target identity. The zero-dependency default:
  * generate object graphs without a database, or test seeds without one.
  */
 export function memoryAdapter<Target = unknown>(
   options: MemoryAdapterOptions<Target> = {},
-): MemoryAdapter<Target> {
-  const store = new Map<Target, Map<string, Record<string, unknown>>>();
+): Adapter<Target> {
+  const store: MemoryStore<Target> = options.store ?? new Map();
 
   function tableFor(target: Target): Map<string, Record<string, unknown>> {
     const existing = store.get(target);
@@ -159,22 +154,6 @@ export function memoryAdapter<Target = unknown>(
       table.set(id, prepare(target, { ...existing, ...values }));
 
       return Promise.resolve();
-    },
-
-    rows: <Insert extends object, A extends object>(
-      seed: Seed<Target, Insert, A, never>,
-    ) => {
-      // Stored rows are untyped records; the seed is the only thing that says
-      // what shape they have, and `parse` may have reshaped them since.
-      const stored: ReadonlyArray<unknown> = [
-        ...tableFor(seed.target).values(),
-      ];
-
-      return stored as ReadonlyArray<{ readonly id: string } & Insert>;
-    },
-
-    clear: () => {
-      store.clear();
     },
   };
 }
