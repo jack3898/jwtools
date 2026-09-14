@@ -143,7 +143,10 @@ export type SeedDefinition<
   readonly build: (
     args: BuildArgs<C, X>,
   ) => Promise<ReadonlyArray<Insert>> | ReadonlyArray<Insert>;
-  /** Named lookups over the rows this seed wrote, exposed on its handle. */
+  /**
+   * Named lookups over the rows this seed wrote, exposed on its handle next
+   * to `all` and `first`, which win over accessors of the same name.
+   */
   readonly accessors?: (args: AccessorArgs<Insert, X>) => A;
   /**
    * Fills columns that could not be set at insert time because the target
@@ -223,22 +226,23 @@ export function defineSeed<
       );
     }
 
-    return Object.assign(
-      {},
-      definition.accessors?.({ ...toolkit, rows: written }),
-      {
-        all: written,
-        first: (): Row<Insert> => {
-          const [row] = written;
+    // With no accessors defined, `A` is inferred as `object`, so `{}` is one.
+    const accessors =
+      definition.accessors?.({ ...toolkit, rows: written }) ?? ({} as A);
 
-          if (!row) {
-            throw new Error(`Seed "${name}" produced no rows`);
-          }
+    return {
+      ...accessors,
+      all: written,
+      first: (): Row<Insert> => {
+        const [row] = written;
 
-          return row;
-        },
+        if (!row) {
+          throw new Error(`Seed "${name}" produced no rows`);
+        }
+
+        return row;
       },
-    );
+    };
   }
 
   return seed;
