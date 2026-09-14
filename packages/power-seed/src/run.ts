@@ -276,9 +276,9 @@ export type SeedEntry<S> = {
   readonly config?: ConfigOf<S> | undefined;
 };
 
-/** The handles `seed` returns, one per entry, in entry order. */
-export type Handles<S extends ReadonlyArray<unknown>> = {
-  readonly [K in keyof S]: HandleOf<S[K]>;
+/** What `seed` resolves to: a handle for any seed that was listed. */
+export type SeedResult<S extends ReadonlyArray<unknown>> = {
+  readonly handle: <T extends S[number]>(seeder: T) => HandleOf<T>;
 };
 
 /**
@@ -294,7 +294,7 @@ export async function seed<
   adapter: Adapter<Target>,
   entries: { readonly [K in keyof S]: SeedEntry<S[K]> },
   ...args: RunArgs<X>
-): Promise<Handles<S>> {
+): Promise<SeedResult<S>> {
   // The conditional keeps callers honest; by here both shapes are the same.
   const [options] = args as [BaseRunOptions<X>?];
   const configs = new Map<object, SeedConfig>();
@@ -308,14 +308,24 @@ export async function seed<
     configs.set(entry.seeder, entry.config ?? {});
   }
 
-  const handles: Array<unknown> = [];
+  const handles = new Map<object, unknown>();
 
   for (const entry of entries) {
-    handles.push(await entry.seeder.resolve(shared));
+    handles.set(entry.seeder, await entry.seeder.resolve(shared));
   }
 
   await shared.runLinks();
 
-  // Built entry by entry, so the shape is the mapped type's.
-  return handles as Handles<S>;
+  return {
+    handle: <T extends S[number]>(seeder: T) => {
+      const handle = handles.get(seeder);
+
+      if (handle === undefined) {
+        throw new Error(`Seed "${shared.nameOf(seeder)}" was not listed`);
+      }
+
+      // Stored under the seed it came from, so it is that seed's handle.
+      return handle as HandleOf<T>;
+    },
+  };
 }

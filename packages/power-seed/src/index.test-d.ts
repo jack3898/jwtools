@@ -142,14 +142,13 @@ describe("extras", () => {
 });
 
 describe("seed", () => {
-  it("returns one handle per entry, in entry order", async () => {
-    const handles = await seed(adapter, [{ seeder: people }]);
+  it("hands back a typed handle for any listed seed", async () => {
+    const result = await seed(adapter, [{ seeder: people }]);
 
-    expectTypeOf(handles.length).toEqualTypeOf<1>();
-    expectTypeOf(handles[0].names()).toEqualTypeOf<Array<string>>();
-    expectTypeOf(handles[0].first().row.age).toEqualTypeOf<number>();
-    // @ts-expect-error only as many handles as entries
-    handles[1];
+    expectTypeOf(result.handle(people).names()).toEqualTypeOf<Array<string>>();
+    expectTypeOf(result.handle(people).first().row.age).toEqualTypeOf<number>();
+    // @ts-expect-error only a listed seed has a handle
+    result.handle(words);
   });
 
   it("types each entry's config from its seeder", () => {

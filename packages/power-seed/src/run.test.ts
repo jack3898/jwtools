@@ -76,7 +76,7 @@ describe("ids", () => {
       target: "named",
       build: () => [{ id: "chosen", value: 1 }, { value: 2 }],
     });
-    const [handle] = await seed(adapter, [{ seeder: named }]);
+    const handle = (await seed(adapter, [{ seeder: named }])).handle(named);
 
     expect(handle.all[0]?.id).toBe("chosen");
     expect(handle.all[1]?.id).toMatch(/^[0-9a-f-]{36}$/);
@@ -84,10 +84,12 @@ describe("ids", () => {
 
   it("can derive through a custom function", async () => {
     const adapter = memoryAdapter<string>();
-    const [handle] = await seed(adapter, [{ seeder: pair }], {
-      id: ({ target, key, namespace }) => `${namespace}/${target}/${key}`,
-      namespace: "ns",
-    });
+    const handle = (
+      await seed(adapter, [{ seeder: pair }], {
+        id: ({ target, key, namespace }) => `${namespace}/${target}/${key}`,
+        namespace: "ns",
+      })
+    ).handle(pair);
 
     expect(handle.all.map((row) => row.id)).toEqual([
       "ns/things/things#0",
@@ -109,40 +111,30 @@ describe("ids", () => {
 
   it("derive from the raw target name, so a renamed seed keeps them", async () => {
     const adapter = memoryAdapter<string>();
-    const [plain] = await seed(adapter, [{ seeder: pair }], { dryRun: true });
-    const [renamed] = await seed(
-      adapter,
-      [
-        {
-          seeder: defineSeed({
-            target: "things",
-            name: "renamed",
-            build: () => [{ n: 1 }],
-          }),
-        },
-      ],
-      { dryRun: true },
-    );
+    const plain = (
+      await seed(adapter, [{ seeder: pair }], { dryRun: true })
+    ).handle(pair);
+    const renamedSeed = defineSeed({
+      target: "things",
+      name: "renamed",
+      build: () => [{ n: 1 }],
+    });
+    const renamed = (
+      await seed(adapter, [{ seeder: renamedSeed }], { dryRun: true })
+    ).handle(renamedSeed);
+    const renamedAgain = defineSeed({
+      target: "things",
+      name: "renamed",
+      build: () => [{ n: 9 }],
+    });
 
     // Same target and index, different seed name: the key differs by name,
     // so the ids do too. Only the target half is shared.
     expect(plain.first().id).not.toBe(renamed.first().id);
     expect(renamed.first().id).toBe(
-      (
-        await seed(
-          adapter,
-          [
-            {
-              seeder: defineSeed({
-                target: "things",
-                name: "renamed",
-                build: () => [{ n: 9 }],
-              }),
-            },
-          ],
-          { dryRun: true },
-        )
-      )[0].first().id,
+      (await seed(adapter, [{ seeder: renamedAgain }], { dryRun: true }))
+        .handle(renamedAgain)
+        .first().id,
     );
   });
 });
@@ -207,10 +199,12 @@ describe("handles", () => {
     const store: MemoryStore<string> = new Map();
     const adapter = memoryAdapter<string>({ store });
 
-    const [playerHandle, teamHandle] = await seed(adapter, [
+    const result = await seed(adapter, [
       { seeder: players },
       { seeder: teams },
     ]);
+    const playerHandle = result.handle(players);
+    const teamHandle = result.handle(teams);
 
     expect(playerHandle.all.map((player) => player.row.captain)).toEqual([
       true,
@@ -227,11 +221,11 @@ describe("handles", () => {
     const store: MemoryStore<string> = new Map();
     const adapter = memoryAdapter<string>({ store });
 
-    const [, teamHandle] = await seed(
-      adapter,
-      [{ seeder: players }, { seeder: teams }],
-      { dryRun: true },
-    );
+    const teamHandle = (
+      await seed(adapter, [{ seeder: players }, { seeder: teams }], {
+        dryRun: true,
+      })
+    ).handle(teams);
 
     expect(teamHandle.names()).toEqual(["Crimson", "Blue"]);
     expect(store.size).toBe(0);
@@ -298,27 +292,26 @@ describe("streams", () => {
     const value = (handle: { first: () => { row: { value: number } } }) =>
       handle.first().row.value;
 
-    const [alone] = await seed(adapter, [{ seeder: things }], options);
-    const [, after] = await seed(
-      adapter,
-      [{ seeder: noise }, { seeder: things }],
-      options,
+    const alone = (await seed(adapter, [{ seeder: things }], options)).handle(
+      things,
     );
-    const [before] = await seed(
-      adapter,
-      [{ seeder: things }, { seeder: noise }],
-      options,
-    );
+    const after = (
+      await seed(adapter, [{ seeder: noise }, { seeder: things }], options)
+    ).handle(things);
+    const before = (
+      await seed(adapter, [{ seeder: things }, { seeder: noise }], options)
+    ).handle(things);
 
     expect(value(after)).toBe(value(alone));
     expect(value(before)).toBe(value(alone));
     // A seed that draws after pulling in a noisy dependency is unaffected too.
-    const [viaNoise] = await seed(adapter, [{ seeder: dependent }], options);
-    const [sameTargetAlone] = await seed(
-      adapter,
-      [{ seeder: draw("dependent") }],
-      options,
-    );
+    const viaNoise = (
+      await seed(adapter, [{ seeder: dependent }], options)
+    ).handle(dependent);
+    const dependentAlone = draw("dependent");
+    const sameTargetAlone = (
+      await seed(adapter, [{ seeder: dependentAlone }], options)
+    ).handle(dependentAlone);
 
     expect(value(viaNoise)).toBe(value(sameTargetAlone));
   });

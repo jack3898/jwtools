@@ -45,11 +45,11 @@ const players = defineSeed({
 });
 
 const adapter = memoryAdapter<string>();
-const [handle] = await seed(adapter, [
+const result = await seed(adapter, [
   { seeder: players, config: { perTeam: 2 } },
 ]);
 
-handle.all; // every player row, with its id
+result.handle(players).all; // every player row, with its id
 ```
 
 Three things happened there:
@@ -372,7 +372,7 @@ const foundation = [
   { seeder: roles },
   { seeder: users },
 ] as const;
-const handles = await seed(adapter, foundation, { dryRun: true });
+const result = await seed(adapter, foundation, { dryRun: true });
 ```
 
 Nothing is written, but the handles name exactly the rows a real run inserts. A test suite can take handles at module level for free and do the only actual seeding in `beforeEach`.
@@ -411,16 +411,16 @@ The implementation ships its own SHA-1, forty lines that never change, so no cry
 
 ## Running
 
-One call. Every entry is seeded, with everything beneath it, against one run, and its handle comes back in the same position:
+One call. Every entry is seeded, with everything beneath it, against one run, and `handle(seed)` hands back any listed seed's handle, typed by the seed:
 
 ```ts
-const [publisherHandle, authorHandle, bookHandle] = await seed(adapter, [
+const result = await seed(adapter, [
   { seeder: publishers },
   { seeder: authors },
   { seeder: books },
 ]);
 
-bookHandle.forAuthor(authorHandle.first().id); // every handle keeps its accessors
+result.handle(books).forAuthor(result.handle(authors).first().id); // every handle keeps its accessors
 ```
 
 Entries share one run, so a seed two of them depend on is built once. A reusable set of entries is just an array to spread: `seed(adapter, [...foundation, { seeder: mine }])`. When a seed needs extras, `options` stops being optional.

@@ -73,10 +73,12 @@ export function engineSuite<Target>(
     });
 
     it("hands back accessors over the rows it wrote", async () => {
-      const [authorHandle, bookHandle] = await seed(adapter, [
+      const result = await seed(adapter, [
         { seeder: authors },
         { seeder: books },
       ]);
+      const authorHandle = result.handle(authors);
+      const bookHandle = result.handle(books);
       const author = authorHandle.byName("Author 2");
       const theirs = bookHandle.forAuthor(author.id);
 
@@ -123,7 +125,7 @@ export function engineSuite<Target>(
         target: authors.target,
         build: () => [],
       });
-      const [handle] = await seed(adapter, [{ seeder: empty }]);
+      const handle = (await seed(adapter, [{ seeder: empty }])).handle(empty);
 
       expect(() => handle.first()).toThrow('Seed "nothing" produced no rows');
     });
@@ -158,12 +160,14 @@ export function engineSuite<Target>(
     });
 
     it("computes the same ids on a dry run as on a real one", async () => {
-      const [dry] = await seed(adapter, [{ seeder: books }], { dryRun: true });
+      const dry = (
+        await seed(adapter, [{ seeder: books }], { dryRun: true })
+      ).handle(books);
 
       expect(await rows(books)).toHaveLength(0);
       expect(await rows(authors)).toHaveLength(0);
 
-      const [real] = await seed(adapter, [{ seeder: books }]);
+      const real = (await seed(adapter, [{ seeder: books }])).handle(books);
 
       expect(real.all.map((row) => row.id)).toEqual(
         dry.all.map((row) => row.id),
@@ -206,13 +210,17 @@ export function engineSuite<Target>(
     });
 
     it("derives ids within the run's namespace", async () => {
-      const [first] = await seed(adapter, [{ seeder: authors }], {
-        dryRun: true,
-      });
-      const [second] = await seed(adapter, [{ seeder: authors }], {
-        dryRun: true,
-        namespace: "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14",
-      });
+      const first = (
+        await seed(adapter, [{ seeder: authors }], {
+          dryRun: true,
+        })
+      ).handle(authors);
+      const second = (
+        await seed(adapter, [{ seeder: authors }], {
+          dryRun: true,
+          namespace: "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14",
+        })
+      ).handle(authors);
 
       expect(first.all.map((row) => row.id)).not.toEqual(
         second.all.map((row) => row.id),

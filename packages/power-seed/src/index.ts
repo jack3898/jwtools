@@ -25,12 +25,12 @@ export type { Random, Range, Weighted } from "./random";
 export { createRandom } from "./random";
 export type {
   ExtendContext,
-  Handles,
   IdContext,
   RunArgs,
   RunOptions,
   SeedEntry,
   SeedReport,
+  SeedResult,
 } from "./run";
 export {
   DEFAULT_NAMESPACE,

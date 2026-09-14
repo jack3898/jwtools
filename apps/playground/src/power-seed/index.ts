@@ -25,10 +25,9 @@ const players = defineSeed({
   },
 });
 
-const [teamHandle, playerHandle] = await seed(memoryAdapter(), [
+const result = await seed(memoryAdapter(), [
   { seeder: teams },
   { seeder: players, config: { perTeam: 2 } },
 ]);
 
-console.log(teamHandle.byName("Red"));
-console.log(playerHandle.all);
+console.log(result.handle(teams).byName("Red"));

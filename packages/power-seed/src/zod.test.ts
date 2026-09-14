@@ -182,18 +182,24 @@ describe("zod specifics", () => {
     const names = (rows: ReadonlyArray<{ row: { name: string } }>) =>
       rows.map(({ row }) => row.name);
 
-    const [first] = await seed(adapter, [{ seeder: people }], { extend });
+    const first = (
+      await seed(adapter, [{ seeder: people }], { extend })
+    ).handle(people);
 
     store.clear();
 
-    const [again] = await seed(adapter, [{ seeder: people }], { extend });
+    const again = (
+      await seed(adapter, [{ seeder: people }], { extend })
+    ).handle(people);
 
     store.clear();
 
-    const [other] = await seed(adapter, [{ seeder: people }], {
-      extend,
-      seed: 2,
-    });
+    const other = (
+      await seed(adapter, [{ seeder: people }], {
+        extend,
+        seed: 2,
+      })
+    ).handle(people);
 
     expect(names(again.all)).toEqual(names(first.all));
     expect(names(other.all)).not.toEqual(names(first.all));
