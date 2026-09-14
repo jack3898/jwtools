@@ -231,7 +231,7 @@ engineSuite("drizzle tables in pglite", {
   authors,
   books,
   profiles,
-  rows: async (table) => {
+  rows: async ({ target: table }) => {
     const column = getTableColumns(table).id;
 
     if (!column) {

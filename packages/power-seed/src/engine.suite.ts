@@ -32,9 +32,9 @@ export type Harness<Target> = {
     { readonly forAuthor: (authorId: string) => ReadonlyArray<Row<BookShape>> }
   >;
   readonly profiles: Seed<Target, object, object>;
-  /** Every stored row for a target, in a stable order. */
+  /** Every stored row for a seed's target, in a stable order. */
   readonly rows: (
-    target: Target,
+    seed: Seed<Target, object, object>,
   ) => Promise<ReadonlyArray<Record<string, unknown>>>;
   readonly reset: () => Promise<void>;
 };
@@ -52,26 +52,24 @@ export function engineSuite<Target>(
   name: string,
   harness: Harness<Target>,
 ): void {
-  const { adapter, authors, books, profiles } = harness;
-  const rowsOf = (seed: Seed<Target, object, object>) =>
-    harness.rows(seed.target);
+  const { adapter, authors, books, profiles, rows, reset } = harness;
 
   describe(name, () => {
-    beforeEach(() => harness.reset());
+    beforeEach(() => reset());
 
     it("builds every dependency beneath the leaf", async () => {
       await seedOne(adapter, books);
 
-      expect(await rowsOf(authors)).toHaveLength(3);
-      expect(await rowsOf(books)).toHaveLength(6);
+      expect(await rows(authors)).toHaveLength(3);
+      expect(await rows(books)).toHaveLength(6);
     });
 
     it("builds a shared dependency once", async () => {
       await seedMany(adapter, { books, profiles });
 
-      expect(await rowsOf(authors)).toHaveLength(3);
-      expect(await rowsOf(books)).toHaveLength(6);
-      expect(await rowsOf(profiles)).toHaveLength(3);
+      expect(await rows(authors)).toHaveLength(3);
+      expect(await rows(books)).toHaveLength(6);
+      expect(await rows(profiles)).toHaveLength(3);
     });
 
     it("hands back accessors over the rows it wrote", async () => {
@@ -92,8 +90,8 @@ export function engineSuite<Target>(
         books: { perAuthor: 3 },
       });
 
-      expect(await rowsOf(authors)).toHaveLength(1);
-      expect(await rowsOf(books)).toHaveLength(3);
+      expect(await rows(authors)).toHaveLength(1);
+      expect(await rows(books)).toHaveLength(3);
     });
 
     it("rejects a config key the seed does not declare", async () => {
@@ -115,12 +113,12 @@ export function engineSuite<Target>(
     it("is a no-op the second time", async () => {
       await seedOne(adapter, books);
 
-      const before = await rowsOf(books);
+      const before = await rows(books);
 
       await seedOne(adapter, books);
 
-      expect(await rowsOf(books)).toEqual(before);
-      expect(await rowsOf(authors)).toHaveLength(3);
+      expect(await rows(books)).toEqual(before);
+      expect(await rows(authors)).toHaveLength(3);
     });
 
     it("refuses to hand back a first row when the seed built none", async () => {
@@ -153,8 +151,8 @@ export function engineSuite<Target>(
     it("runs links once every seed has inserted", async () => {
       await seedOne(adapter, books);
 
-      const written = await rowsOf(authors);
-      const bookIds = new Set((await rowsOf(books)).map((row) => row.id));
+      const written = await rows(authors);
+      const bookIds = new Set((await rows(books)).map((row) => row.id));
 
       expect(written).toHaveLength(3);
 
@@ -166,8 +164,8 @@ export function engineSuite<Target>(
     it("computes the same ids on a dry run as on a real one", async () => {
       const dry = await seedOne(adapter, books, {}, { dryRun: true });
 
-      expect(await rowsOf(books)).toHaveLength(0);
-      expect(await rowsOf(authors)).toHaveLength(0);
+      expect(await rows(books)).toHaveLength(0);
+      expect(await rows(authors)).toHaveLength(0);
 
       const real = await seedOne(adapter, books);
 
@@ -195,8 +193,8 @@ export function engineSuite<Target>(
     });
 
     it("draws the same values for the same seed and other values for another", async () => {
-      const titles = async () => (await rowsOf(books)).map((row) => row.title);
-      const ids = async () => (await rowsOf(books)).map((row) => row.id);
+      const titles = async () => (await rows(books)).map((row) => row.title);
+      const ids = async () => (await rows(books)).map((row) => row.id);
 
       await seedOne(adapter, books);
 

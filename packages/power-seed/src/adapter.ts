@@ -1,3 +1,5 @@
+import type { Seed } from "./define";
+
 /** What the engine stamps on every row before the seed's own columns. */
 export type StampContext = {
   readonly id: string;
@@ -67,8 +69,15 @@ export type MemoryAdapterOptions<Target> = {
 };
 
 export type MemoryAdapter<Target> = Adapter<Target> & {
-  /** Rows stored against a target, in insertion order. */
-  readonly rows: (target: Target) => ReadonlyArray<Record<string, unknown>>;
+  /**
+   * Rows stored against a seed's target, in insertion order, typed as that
+   * seed's rows. Reads the store as it stands, so unlike a handle's `all` it
+   * shows what `link` set. Two seeds that share a target see each other's
+   * rows here.
+   */
+  readonly rows: <Insert extends object, A extends object>(
+    seed: Seed<Target, Insert, A, never>,
+  ) => ReadonlyArray<{ readonly id: string } & Insert>;
   /** Forget every row. */
   readonly clear: () => void;
 };
@@ -152,7 +161,17 @@ export function memoryAdapter<Target = unknown>(
       return Promise.resolve();
     },
 
-    rows: (target) => [...tableFor(target).values()],
+    rows: <Insert extends object, A extends object>(
+      seed: Seed<Target, Insert, A, never>,
+    ) => {
+      // Stored rows are untyped records; the seed is the only thing that says
+      // what shape they have, and `parse` may have reshaped them since.
+      const stored: ReadonlyArray<unknown> = [
+        ...tableFor(seed.target).values(),
+      ];
+
+      return stored as ReadonlyArray<{ readonly id: string } & Insert>;
+    },
 
     clear: () => {
       store.clear();

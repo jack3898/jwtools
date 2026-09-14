@@ -155,7 +155,47 @@ describe("links", () => {
     await seedOne(adapter, outer);
 
     expect(order).toEqual(["outer link", "inner link"]);
-    expect(adapter.rows("inner")).toHaveLength(1);
+    expect(adapter.rows(inner)).toHaveLength(1);
+  });
+});
+
+describe("memory adapter rows", () => {
+  it("reads a dependency's rows back by seed, after links have run", async () => {
+    const adapter = memoryAdapter<string>();
+    const teams = defineSeed({
+      target: "teams",
+      build: () => [{ name: "Red" }, { name: "Blue" }],
+    });
+    const players = defineSeed({
+      target: "players",
+      build: async ({ get }) => {
+        const { all } = await get(teams);
+
+        return all.map((team) => ({ teamId: team.id, captain: false }));
+      },
+      link: async ({ rows, update }) => {
+        for (const player of rows) {
+          await update(player.id, { captain: true });
+        }
+      },
+    });
+
+    const handle = await seedOne(adapter, players);
+
+    // No handle for teams came back, but its rows are reachable by seed.
+    expect(adapter.rows(teams).map((team) => team.name)).toEqual([
+      "Red",
+      "Blue",
+    ]);
+    // The handle is the insert-time snapshot; the store shows the link's work.
+    expect(handle.all.map((player) => player.row.captain)).toEqual([
+      false,
+      false,
+    ]);
+    expect(adapter.rows(players).map((player) => player.captain)).toEqual([
+      true,
+      true,
+    ]);
   });
 });
 

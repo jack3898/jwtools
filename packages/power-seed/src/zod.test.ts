@@ -114,7 +114,7 @@ engineSuite("zod schemas in memory", {
   authors,
   books,
   profiles,
-  rows: (schema) => Promise.resolve(adapter.rows(schema)),
+  rows: (seed) => Promise.resolve(adapter.rows(seed)),
   reset: () => {
     adapter.clear();
 

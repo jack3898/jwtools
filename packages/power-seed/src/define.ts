@@ -228,13 +228,7 @@ async function build<
   // shared, so it cannot take different config down different paths.
   const provided = run.configFor(config, name);
 
-  assertKeysAreClaimed(name, definition.defaults ?? {}, provided);
-
-  const merged = Object.assign(
-    {},
-    definition.defaults,
-    deepMerge(definition.defaults ?? {}, provided),
-  );
+  const merged = resolveConfig(name, definition.defaults, provided);
 
   run.enter(name);
 
@@ -316,21 +310,29 @@ export type ConfigOf<S> = S extends { defaults?: infer C }
   : never;
 
 /**
- * `assertConfigWasUsed` only sees the top level, so without this a misspelt
- * key inside a seed's own config reads as a silent request for the default.
+ * The engine carries config as an untyped record; `ConfigOf` types it for the
+ * caller. This is the one seam that hands the seed back its own `C`: the key
+ * check is what makes the cast true, so they live together.
+ *
+ * `assertConfigWasUsed` only sees the top level, so without the check a
+ * misspelt key inside a seed's own config reads as a silent request for the
+ * default.
  */
-function assertKeysAreClaimed(
+function resolveConfig<C extends SeedConfig>(
   name: string,
-  defaults: SeedConfig,
+  defaults: C | undefined,
   provided: SeedConfig,
-): void {
-  const unknown = Object.keys(provided).filter((key) => !(key in defaults));
+): C {
+  const claimed: SeedConfig = defaults ?? {};
+  const unknown = Object.keys(provided).filter((key) => !(key in claimed));
 
   if (unknown.length > 0) {
     throw new Error(
-      `Seed "${name}" has no config named: ${unknown.join(", ")}. Accepts: ${Object.keys(defaults).sort().join(", ")}`,
+      `Seed "${name}" has no config named: ${unknown.join(", ")}. Accepts: ${Object.keys(claimed).sort().join(", ")}`,
     );
   }
+
+  return deepMerge(claimed, provided) as C;
 }
 
 function isPlainObject(value: unknown): value is SeedConfig {

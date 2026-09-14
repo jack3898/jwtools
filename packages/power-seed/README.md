@@ -48,7 +48,7 @@ const adapter = memoryAdapter<string>();
 const handle = await seedOne(adapter, players, { players: { perTeam: 2 } });
 
 handle.all; // every player row, with its id
-adapter.rows("teams"); // seeded on the way, because players asked for it
+adapter.rows(teams); // seeded on the way, because players asked for it
 ```
 
 Three things happened there:
@@ -243,7 +243,7 @@ type Adapter<Target> = {
 };
 ```
 
-`memoryAdapter()` ships in the box. It keeps rows in a `Map` keyed by target identity, names string targets after themselves, and takes an optional `parse` hook. Use it to generate object graphs with no database at all, or to unit test seeds without one.
+`memoryAdapter()` ships in the box. It keeps rows in a `Map` keyed by target identity, names string targets after themselves, and takes an optional `parse` hook. Use it to generate object graphs with no database at all, or to unit test seeds without one. `rows(seed)` hands back what is stored against that seed's target, typed as the seed's rows and reflecting anything `link` set, which a handle's `all` does not.
 
 ## Faker and other extras
 
