@@ -9,12 +9,10 @@ function droppingAdapter(present: boolean): Adapter<string> {
   return {
     nameOf: (target) => target,
     insert: (_target, rows) => Promise.resolve(rows.length - 1),
-    ...(present
-      ? {
-          present: (_target, ids: ReadonlyArray<string>) =>
-            Promise.resolve(ids.slice(0, -1)),
-        }
-      : {}),
+    present: present
+      ? (_target, ids: ReadonlyArray<string>) =>
+          Promise.resolve(ids.slice(0, -1))
+      : undefined,
     update: () => Promise.resolve(),
   };
 }

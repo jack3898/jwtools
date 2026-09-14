@@ -62,21 +62,19 @@ type BaseRunOptions<X extends object> = {
   readonly extend?: ((context: ExtendContext) => X) | undefined;
 };
 
-/** `extend` is optional only when the seeds need nothing beyond the toolkit. */
-type ExtendRequirement<X extends object> = object extends X
-  ? unknown
-  : { readonly extend: (context: ExtendContext) => X };
-
-export type RunOptions<X extends object = object> = BaseRunOptions<X> &
-  ExtendRequirement<X>;
-
 /**
  * The trailing argument of `seed`. Optional until a seed needs extras, at
  * which point leaving it off would skip `extend` unnoticed.
  */
 export type RunArgs<X extends object> = object extends X
-  ? [options?: RunOptions<X>]
-  : [options: RunOptions<X>];
+  ? [options?: BaseRunOptions<X>]
+  : [
+      options: BaseRunOptions<X> & {
+        readonly extend: (context: ExtendContext) => X;
+      },
+    ];
+
+export type RunOptions<X extends object = object> = NonNullable<RunArgs<X>[0]>;
 
 /** `week_number_systems` -> `weekNumberSystems`, so config keys read naturally. */
 function camelCase(value: string): string {
@@ -123,7 +121,10 @@ function createRun<Target, X extends object>(
     return camelCase(targetName);
   }
 
-  /** The raw target name goes into ids, so a rename of the seed keeps them. */
+  /**
+   * The target half of an id is the adapter's name for the target, not the
+   * seed's, so two seeds on one target share it and differ only by key.
+   */
   function targetNameOf(meta: SeedMeta): string {
     return adapter.nameOf(targetOf(meta)) ?? nameOf(meta);
   }
@@ -153,22 +154,24 @@ function createRun<Target, X extends object>(
 
     // Ignoring conflicts is what makes a run repeatable: ids derive from
     // identity, so a row already there is the same row.
-    insert: async (meta, name, rows) => {
+    insert: async (meta, rows) => {
+      const name = nameOf(meta);
+      const targetName = targetNameOf(meta);
       const heldRows = held.get(meta.target) ?? new Map<string, object>();
 
       held.set(meta.target, heldRows);
 
-      for (const { id, values } of rows) {
+      for (const { id, row } of rows) {
         // Same id, same row, is what makes a rerun safe. Within one run it
         // means two seeds minted the same id, and the adapter would keep the
         // first while the second's handle vouches for rows that never landed.
         if (heldRows.has(id)) {
           throw new Error(
-            `Seed "${name}" minted id "${id}" for ${targetNameOf(meta)}, which this run already wrote. Two seeds on one target need different names or namespaces.`,
+            `Seed "${name}" minted id "${id}" for ${targetName}, which this run already wrote. Two seeds on one target need different names or namespaces.`,
           );
         }
 
-        heldRows.set(id, values);
+        heldRows.set(id, row);
       }
 
       if (options.dryRun) {
@@ -178,7 +181,7 @@ function createRun<Target, X extends object>(
       const target = targetOf(meta);
       const written = await adapter.insert(
         target,
-        rows.map(({ values }) => ({ ...values })),
+        rows.map(({ row }) => ({ ...row })),
       );
 
       // A row can be skipped because it is already there, the same seed run
@@ -192,20 +195,20 @@ function createRun<Target, X extends object>(
 
         if (missing.length > 0) {
           throw new Error(
-            `Seed "${name}" offered ${offered.length} rows to ${targetNameOf(meta)} but ${missing.length} are not in it. A unique constraint other than the primary key rejected them, so their handles would name rows that do not exist.`,
+            `Seed "${name}" offered ${offered.length} rows to ${targetName} but ${missing.length} are not in it. A unique constraint other than the primary key rejected them, so their handles would name rows that do not exist.`,
           );
         }
       }
 
-      options.onSeed?.({ name, target: targetNameOf(meta), rows: rows.length });
+      options.onSeed?.({ name, target: targetName, rows: rows.length });
     },
 
-    update: async (target, id, values) => {
+    update: async (meta, id, values) => {
       if (!options.dryRun) {
-        await adapter.update(target as Target, id, { ...values });
+        await adapter.update(targetOf(meta), id, { ...values });
       }
 
-      const row = held.get(target)?.get(id);
+      const row = held.get(meta.target)?.get(id);
 
       if (row) {
         Object.assign(row, values);
@@ -226,26 +229,26 @@ function createRun<Target, X extends object>(
       }
     },
 
-    configOf: (seed) => configs.get(seed) ?? {},
+    configOf: (meta) => configs.get(meta) ?? meta.defaults ?? {},
 
-    get: (dependency) => {
-      const dependencyName = nameOf(dependency);
+    // A seed that asks for one still on the stack, itself included, is a
+    // cycle. Links run with an empty stack, so they may ask for anything.
+    get: async (dependency) => {
+      const name = nameOf(dependency);
 
-      if (stack.includes(dependencyName)) {
+      if (stack.includes(name)) {
         throw new Error(
-          `Seed dependency cycle: ${[...stack, dependencyName].join(" -> ")}`,
+          `Seed dependency cycle: ${[...stack, name].join(" -> ")}`,
         );
       }
 
-      return dependency.resolve(run);
-    },
-
-    enter: (name) => {
       stack.push(name);
-    },
 
-    leave: () => {
-      stack.pop();
+      try {
+        return await dependency.resolve(run);
+      } finally {
+        stack.pop();
+      }
     },
   };
 
@@ -262,11 +265,56 @@ function defaultId({ target, key, namespace }: IdContext): string {
  * a namespace that is not a uuid.
  */
 function streamSeed(seed: number, target: string, namespace: string): number {
-  const [a = 0, b = 0, c = 0, d = 0] = sha1(
-    utf8(`${seed}:${target}:${namespace}`),
-  );
+  const digest = sha1(utf8(`${seed}:${target}:${namespace}`));
 
-  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
+  return new DataView(digest.buffer, digest.byteOffset).getUint32(0);
+}
+
+/**
+ * The engine carries config as an untyped record; `ConfigOf` types it for the
+ * caller and `build` reads it back as the defaults' shape. The key check is
+ * what makes that true. Without it a misspelt key would read as a silent
+ * request for the default.
+ */
+function resolveConfig(
+  name: string,
+  defaults: SeedConfig | undefined,
+  provided: SeedConfig,
+): SeedConfig {
+  const claimed = defaults ?? {};
+  const unknown = Object.keys(provided).filter((key) => !(key in claimed));
+
+  if (unknown.length > 0) {
+    throw new Error(
+      `Seed "${name}" has no config named: ${unknown.join(", ")}. Accepts: ${Object.keys(claimed).sort().join(", ")}`,
+    );
+  }
+
+  return deepMerge(claimed, provided);
+}
+
+function isPlainObject(value: unknown): value is SeedConfig {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Nested objects merge, so `{ managers: { min: 2 } }` keeps the default `max`
+ * instead of dropping it. Arrays replace: a partial weighting table means
+ * nothing.
+ */
+function deepMerge(defaults: SeedConfig, overrides: SeedConfig): SeedConfig {
+  const merged: SeedConfig = { ...defaults };
+
+  for (const [key, value] of Object.entries(overrides)) {
+    const existing = defaults[key];
+
+    merged[key] =
+      isPlainObject(existing) && isPlainObject(value)
+        ? deepMerge(existing, value)
+        : value;
+  }
+
+  return merged;
 }
 
 /** One seed to run, with the overrides for its `defaults`. */
@@ -295,23 +343,25 @@ export async function seed<
   entries: { readonly [K in keyof S]: SeedEntry<S[K]> },
   ...args: RunArgs<X>
 ): Promise<SeedResult<S>> {
-  // The conditional keeps callers honest; by here both shapes are the same.
-  const [options] = args as [BaseRunOptions<X>?];
+  const [options] = args;
   const configs = new Map<object, SeedConfig>();
   const shared = createRun(adapter, options ?? {}, configs);
 
-  for (const entry of entries) {
-    if (configs.has(entry.seeder)) {
-      throw new Error(`Seed "${shared.nameOf(entry.seeder)}" is listed twice`);
+  // Every listing mistake is caught here, before anything is inserted.
+  for (const { seeder, config } of entries) {
+    const name = shared.nameOf(seeder);
+
+    if (configs.has(seeder)) {
+      throw new Error(`Seed "${name}" is listed twice`);
     }
 
-    configs.set(entry.seeder, entry.config ?? {});
+    configs.set(seeder, resolveConfig(name, seeder.defaults, config ?? {}));
   }
 
   const handles = new Map<object, unknown>();
 
-  for (const entry of entries) {
-    handles.set(entry.seeder, await entry.seeder.resolve(shared));
+  for (const { seeder } of entries) {
+    handles.set(seeder, await shared.get(seeder));
   }
 
   await shared.runLinks();

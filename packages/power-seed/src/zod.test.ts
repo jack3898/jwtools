@@ -1,7 +1,7 @@
 import { en, Faker } from "@faker-js/faker";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ADJECTIVES, engineSuite, NOUNS } from "./engine.suite";
+import { engineSuite, harnessSeeds } from "./engine.suite";
 import {
   defineSeed as define,
   type MemoryStore,
@@ -45,72 +45,10 @@ const adapter = memoryAdapter<z.ZodObject>({
   parse: (schema, row) => schema.parse(row),
 });
 
-const authors = defineSeed({
-  target: authorSchema,
-  name: "authors",
-  defaults: { count: 3 },
-  build: ({ config }) =>
-    Array.from({ length: config.count }, (_, index) => ({
-      name: `Author ${index + 1}`,
-    })),
-  accessors: ({ rows }) => ({
-    byName: (name: string) => {
-      const found = rows.find((author) => author.row.name === name);
-
-      if (!found) {
-        throw new Error(`No author named "${name}"`);
-      }
-
-      return found;
-    },
-  }),
-});
-
-const books = defineSeed({
-  target: bookSchema,
-  name: "books",
-  defaults: { perAuthor: 2 },
-  build: async ({ config, random, get }) => {
-    const { all } = await get(authors);
-
-    return all.flatMap((author) =>
-      Array.from({ length: config.perAuthor }, () => ({
-        authorId: author.id,
-        title: `${random.pick(ADJECTIVES)} ${random.pick(NOUNS)}`,
-      })),
-    );
-  },
-  accessors: ({ rows }) => ({
-    forAuthor: (authorId: string) =>
-      rows.filter((book) => book.row.authorId === authorId),
-  }),
-  // authors.favouriteBookId points at books, which point back at authors, so
-  // it can only be set once both are in.
-  link: async ({ get, rows, updateIn }) => {
-    const { all } = await get(authors);
-
-    for (const author of all) {
-      const first = rows.find((book) => book.row.authorId === author.id);
-
-      if (first) {
-        await updateIn(authors, author.id, { favouriteBookId: first.id });
-      }
-    }
-  },
-});
-
-const profiles = defineSeed({
-  target: profileSchema,
-  name: "profiles",
-  build: async ({ get }) => {
-    const { all } = await get(authors);
-
-    return all.map((author) => ({
-      authorId: author.id,
-      bio: `About ${author.row.name}`,
-    }));
-  },
-});
+const { authors, books, profiles } = harnessSeeds<z.ZodObject>(
+  { authors: authorSchema, books: bookSchema, profiles: profileSchema },
+  { authors: "authors", books: "books", profiles: "profiles" },
+);
 
 engineSuite("zod schemas in memory", {
   adapter,

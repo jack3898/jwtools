@@ -39,14 +39,92 @@ export type Harness<Target> = {
   readonly reset: () => Promise<void>;
 };
 
-export const ADJECTIVES = ["Quiet", "Red", "Last", "Wild", "Blue"] as const;
-export const NOUNS = [
-  "Harbour",
-  "Orchard",
-  "Signal",
-  "Meadow",
-  "Lantern",
-] as const;
+const ADJECTIVES = ["Quiet", "Red", "Last", "Wild", "Blue"] as const;
+const NOUNS = ["Harbour", "Orchard", "Signal", "Meadow", "Lantern"] as const;
+
+type Targets<Target> = {
+  readonly authors: Target;
+  readonly books: Target;
+  readonly profiles: Target;
+};
+
+/**
+ * The three seeds the suite runs over, on whatever targets a harness has.
+ * A harness whose adapter cannot name its targets passes names as well.
+ */
+export function harnessSeeds<Target>(
+  targets: Targets<Target>,
+  names?: Targets<string>,
+) {
+  const authors = defineSeed({
+    target: targets.authors,
+    name: names?.authors,
+    defaults: { count: 3 },
+    build: ({ config }): Array<AuthorShape> =>
+      Array.from({ length: config.count }, (_, index) => ({
+        name: `Author ${index + 1}`,
+      })),
+    accessors: ({ rows }) => ({
+      byName: (name: string) => {
+        const found = rows.find((author) => author.row.name === name);
+
+        if (!found) {
+          throw new Error(`No author named "${name}"`);
+        }
+
+        return found;
+      },
+    }),
+  });
+
+  const books = defineSeed({
+    target: targets.books,
+    name: names?.books,
+    defaults: { perAuthor: 2 },
+    build: async ({ config, random, get }): Promise<Array<BookShape>> => {
+      const { all } = await get(authors);
+
+      return all.flatMap((author) =>
+        Array.from({ length: config.perAuthor }, () => ({
+          authorId: author.id,
+          title: `${random.pick(ADJECTIVES)} ${random.pick(NOUNS)}`,
+        })),
+      );
+    },
+    accessors: ({ rows }) => ({
+      forAuthor: (authorId: string) =>
+        rows.filter((book) => book.row.authorId === authorId),
+    }),
+    // authors.favouriteBookId points at books, which point back at authors,
+    // so it can only be set once both are in.
+    link: async ({ get, rows, updateIn }) => {
+      const { all } = await get(authors);
+
+      for (const author of all) {
+        const first = rows.find((book) => book.row.authorId === author.id);
+
+        if (first) {
+          await updateIn(authors, author.id, { favouriteBookId: first.id });
+        }
+      }
+    },
+  });
+
+  const profiles = defineSeed({
+    target: targets.profiles,
+    name: names?.profiles,
+    build: async ({ get }) => {
+      const { all } = await get(authors);
+
+      return all.map((author) => ({
+        authorId: author.id,
+        bio: `About ${author.row.name}`,
+      }));
+    },
+  });
+
+  return { authors, books, profiles };
+}
 
 export function engineSuite<Target>(
   name: string,
@@ -196,12 +274,12 @@ export function engineSuite<Target>(
       const firstTitles = await titles();
       const firstIds = await ids();
 
-      await harness.reset();
+      await reset();
       await seed(adapter, [{ seeder: books }]);
 
       expect(await titles()).toEqual(firstTitles);
 
-      await harness.reset();
+      await reset();
       await seed(adapter, [{ seeder: books }], { seed: 7 });
 
       expect(await titles()).not.toEqual(firstTitles);

@@ -1,3 +1,4 @@
+import type { StampContext } from "./adapter";
 import type { Random } from "./random";
 
 export type SeedConfig = Record<string, unknown>;
@@ -11,7 +12,7 @@ export type Toolkit = {
   readonly now: Date;
   /** An id that is a pure function of `key` within this seed's target. */
   readonly id: (key: string) => string;
-  /** A stream seeded once per run. */
+  /** A stream of this seed's own, derived from the run seed and the seed. */
   readonly random: Random;
 };
 
@@ -31,12 +32,8 @@ export type Handle<Insert extends object, A extends object> = A & {
  * Asks for another seed. What a builder calls `get()` on IS its dependency,
  * so there is no separate list to keep in sync.
  */
-export type Get<X extends object> = <
-  Target,
-  Insert extends object,
-  A extends object,
->(
-  seed: Seed<Target, Insert, A, X>,
+export type Get<X extends object> = <Insert extends object, A extends object>(
+  seed: Seed<unknown, Insert, A, X>,
 ) => Promise<Handle<Insert, A>>;
 
 /** The parts of a seed the engine reads without knowing its types. */
@@ -44,6 +41,7 @@ export type SeedMeta = {
   readonly name: string | undefined;
   readonly target: unknown;
   readonly namespace: string | undefined;
+  readonly defaults: SeedConfig | undefined;
 };
 
 /**
@@ -70,22 +68,20 @@ export type Seed<
 export type Run<X extends object> = {
   readonly nameOf: (seed: SeedMeta) => string;
   readonly toolkit: (seed: SeedMeta) => Toolkit & X;
-  readonly stamp: (context: { id: string; now: Date }) => object;
+  readonly stamp: (context: StampContext) => object;
   readonly insert: (
     seed: SeedMeta,
-    name: string,
-    rows: ReadonlyArray<{ id: string; values: object }>,
+    rows: ReadonlyArray<Row<object>>,
   ) => Promise<void>;
   readonly update: (
-    target: unknown,
+    seed: SeedMeta,
     id: string,
     values: object,
   ) => Promise<void>;
-  /** The overrides an entry attached to this seed, keyed by identity. */
-  readonly configOf: (seed: object) => SeedConfig;
+  /** The seed's defaults under its entry's overrides, checked when listed. */
+  readonly configOf: (seed: SeedMeta) => SeedConfig;
+  /** Resolves a seed once per run, and refuses one that is still building. */
   readonly get: Get<X>;
-  readonly enter: (name: string) => void;
-  readonly leave: () => void;
   /** Queues a link to run once every seed in this run has inserted. */
   readonly defer: (link: () => Promise<void>) => void;
   readonly runLinks: () => Promise<void>;
@@ -106,28 +102,21 @@ export type LinkArgs<
   Insert extends object,
   C extends SeedConfig,
   X extends object,
-> = Toolkit &
-  X & {
-    readonly config: C;
-    readonly get: Get<X>;
-    readonly rows: ReadonlyArray<Row<Insert>>;
-    /** Sets columns on one of this seed's own rows. */
-    readonly update: (id: string, values: Partial<Insert>) => Promise<void>;
-    /**
-     * Sets columns on a row belonging to another seed. A reciprocal pair has to
-     * be written from one place: writing only the side you own leaves the
-     * other table disagreeing, and nothing in the database says otherwise.
-     */
-    readonly updateIn: <
-      OtherTarget,
-      OtherInsert extends object,
-      OtherA extends object,
-    >(
-      seed: Seed<OtherTarget, OtherInsert, OtherA, X>,
-      id: string,
-      values: Partial<OtherInsert>,
-    ) => Promise<void>;
-  };
+> = BuildArgs<C, X> & {
+  readonly rows: ReadonlyArray<Row<Insert>>;
+  /** Sets columns on one of this seed's own rows. */
+  readonly update: (id: string, values: Partial<Insert>) => Promise<void>;
+  /**
+   * Sets columns on a row belonging to another seed. A reciprocal pair has to
+   * be written from one place: writing only the side you own leaves the
+   * other table disagreeing, and nothing in the database says otherwise.
+   */
+  readonly updateIn: <OtherInsert extends object, OtherA extends object>(
+    seed: Seed<unknown, OtherInsert, OtherA, X>,
+    id: string,
+    values: Partial<OtherInsert>,
+  ) => Promise<void>;
+};
 
 export type SeedDefinition<
   Target,
@@ -142,13 +131,13 @@ export type SeedDefinition<
    * Defaults to the camelCase of the adapter's name for the target. Set it to
    * put two seeds on one target, or when the adapter cannot name the target.
    */
-  readonly name?: string;
+  readonly name?: string | undefined;
   /**
    * Ids derive within this namespace. Two seeds writing the same target from
    * different worlds must set different ones, or they mint identical ids for
    * unrelated rows and the run refuses the second.
    */
-  readonly namespace?: string;
+  readonly namespace?: string | undefined;
   /** Config an entry may override. Every key must be declared here. */
   readonly defaults?: C;
   readonly build: (
@@ -194,8 +183,7 @@ export function defineSeed<
         return cached;
       }
 
-      // The seed hands itself over, since config is keyed by its identity.
-      const pending = build(definition, run, seed);
+      const pending = build(run);
 
       cache.set(run, pending);
 
@@ -203,89 +191,57 @@ export function defineSeed<
     },
   };
 
-  return seed;
-}
+  async function build(run: Run<X>): Promise<Handle<Insert, A>> {
+    const name = run.nameOf(seed);
+    const toolkit = run.toolkit(seed);
+    // The run checked and merged this seed's config against its defaults when
+    // it was listed, so what comes back has the defaults' shape.
+    const args = { ...toolkit, config: run.configOf(seed) as C, get: run.get };
+    const built = await definition.build(args);
 
-async function build<
-  Target,
-  Insert extends object,
-  C extends SeedConfig,
-  A extends object,
-  X extends object,
->(
-  definition: SeedDefinition<Target, Insert, C, A, X>,
-  run: Run<X>,
-  self: object,
-): Promise<Handle<Insert, A>> {
-  const meta: SeedMeta = {
-    name: definition.name,
-    target: definition.target,
-    namespace: definition.namespace,
-  };
-  const name = run.nameOf(meta);
-  const toolkit = run.toolkit(meta);
-  // A seed is built once and shared, so it cannot take different config down
-  // different paths: whatever its own entry said applies wherever it is met.
-  const provided = run.configOf(self);
+    const written = built.map((row, index) => {
+      const id = ownId(row) ?? toolkit.id(`${name}#${index}`);
 
-  const merged = resolveConfig(name, definition.defaults, provided);
+      return {
+        id,
+        row: { id, ...run.stamp({ id, now: toolkit.now }), ...row },
+      };
+    });
 
-  run.enter(name);
+    await run.insert(seed, written);
 
-  const built = await definition.build({
-    ...toolkit,
-    config: merged,
-    get: run.get,
-  });
+    const { link } = definition;
 
-  run.leave();
+    if (link) {
+      run.defer(() =>
+        link({
+          ...args,
+          rows: written,
+          update: (id, values) => run.update(seed, id, values),
+          updateIn: (other, id, values) => run.update(other, id, values),
+        }),
+      );
+    }
 
-  const written = built.map((row, index) => {
-    const id = ownId(row) ?? toolkit.id(`${name}#${index}`);
+    return Object.assign(
+      {},
+      definition.accessors?.({ ...toolkit, rows: written }),
+      {
+        all: written,
+        first: (): Row<Insert> => {
+          const [row] = written;
 
-    return {
-      id,
-      row: { id, ...run.stamp({ id, now: toolkit.now }), ...row },
-    };
-  });
+          if (!row) {
+            throw new Error(`Seed "${name}" produced no rows`);
+          }
 
-  await run.insert(
-    meta,
-    name,
-    written.map(({ id, row }) => ({ id, values: row })),
-  );
-
-  const { link } = definition;
-
-  if (link) {
-    run.defer(() =>
-      link({
-        ...toolkit,
-        config: merged,
-        get: run.get,
-        rows: written,
-        update: (id, values) => run.update(definition.target, id, values),
-        updateIn: (other, id, values) => run.update(other.target, id, values),
-      }),
+          return row;
+        },
+      },
     );
   }
 
-  return Object.assign(
-    {},
-    definition.accessors?.({ ...toolkit, rows: written }),
-    {
-      all: written,
-      first: (): Row<Insert> => {
-        const [row] = written;
-
-        if (!row) {
-          throw new Error(`Seed "${name}" produced no rows`);
-        }
-
-        return row;
-      },
-    },
-  );
+  return seed;
 }
 
 /** A row may bring its own id; the derived one is the fallback. */
@@ -323,50 +279,3 @@ export type ConfigOf<S> =
   S extends Seed<unknown, object, object, never, infer C>
     ? Overrides<C>
     : never;
-
-/**
- * The engine carries config as an untyped record; `ConfigOf` types it for the
- * caller. This is the one seam that hands the seed back its own `C`: the key
- * check is what makes the cast true, so they live together. Without the
- * check, a misspelt key would read as a silent request for the default.
- */
-function resolveConfig<C extends SeedConfig>(
-  name: string,
-  defaults: C | undefined,
-  provided: SeedConfig,
-): C {
-  const claimed: SeedConfig = defaults ?? {};
-  const unknown = Object.keys(provided).filter((key) => !(key in claimed));
-
-  if (unknown.length > 0) {
-    throw new Error(
-      `Seed "${name}" has no config named: ${unknown.join(", ")}. Accepts: ${Object.keys(claimed).sort().join(", ")}`,
-    );
-  }
-
-  return deepMerge(claimed, provided) as C;
-}
-
-function isPlainObject(value: unknown): value is SeedConfig {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Nested objects merge, so `{ managers: { min: 2 } }` keeps the default `max`
- * instead of dropping it. Arrays replace: a partial weighting table means
- * nothing.
- */
-function deepMerge(defaults: SeedConfig, overrides: SeedConfig): SeedConfig {
-  const merged: SeedConfig = { ...defaults };
-
-  for (const [key, value] of Object.entries(overrides)) {
-    const existing = defaults[key];
-
-    merged[key] =
-      isPlainObject(existing) && isPlainObject(value)
-        ? deepMerge(existing, value)
-        : value;
-  }
-
-  return merged;
-}

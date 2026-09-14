@@ -24,7 +24,9 @@ export type Adapter<Target> = {
    * freely. Most other drivers do not, so leave this out unless every target
    * has the columns.
    */
-  readonly stamp?: (context: StampContext) => Record<string, unknown>;
+  readonly stamp?:
+    | ((context: StampContext) => Record<string, unknown>)
+    | undefined;
   /**
    * Write rows, ignoring any whose id is already present. That is what makes a
    * rerun a no-op: ids derive from identity, so a row already there is the
@@ -40,10 +42,12 @@ export type Adapter<Target> = {
    * fewer rows than it was offered, to tell a harmless repeat from a row a
    * unique constraint rejected.
    */
-  readonly present?: (
-    target: Target,
-    ids: ReadonlyArray<string>,
-  ) => Promise<ReadonlyArray<string>>;
+  readonly present?:
+    | ((
+        target: Target,
+        ids: ReadonlyArray<string>,
+      ) => Promise<ReadonlyArray<string>>)
+    | undefined;
   /** Set columns on the row with this id. */
   readonly update: (
     target: Target,
@@ -100,12 +104,9 @@ export function memoryAdapter<Target = unknown>(
     return created;
   }
 
-  function prepare(
-    target: Target,
-    row: Record<string, unknown>,
-  ): Record<string, unknown> {
-    return options.parse ? options.parse(target, row) : { ...row };
-  }
+  // The engine hands over private copies, so there is nothing to defend.
+  const prepare =
+    options.parse ?? ((_target: Target, row: Record<string, unknown>) => row);
 
   const nameOf =
     options.nameOf ??
@@ -115,7 +116,7 @@ export function memoryAdapter<Target = unknown>(
   return {
     nameOf,
 
-    ...(options.stamp ? { stamp: options.stamp } : {}),
+    stamp: options.stamp,
 
     insert: (target, rows) => {
       const table = tableFor(target);

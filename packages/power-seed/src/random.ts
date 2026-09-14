@@ -10,7 +10,7 @@ export type Weighted<T> = {
 };
 
 /**
- * The draws a seed usually needs, on a stream the engine seeds once per run.
+ * The draws a seed usually needs, on a stream the engine seeds once per seed.
  * Anything richer, names and addresses say, comes in through `extend`.
  */
 export type Random = {
@@ -50,6 +50,11 @@ export function createRandom(seed: number): Random {
     return ((t ^ (t >>> 14)) >>> 0) / 0x1_0000_0000;
   }
 
+  /** An index below `count`: the one way a draw becomes a position. */
+  function below(count: number): number {
+    return Math.floor(next() * count);
+  }
+
   function assertRange({ min, max }: Range): void {
     if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
       throw new Error(`Invalid range: min ${min}, max ${max}`);
@@ -69,21 +74,17 @@ export function createRandom(seed: number): Random {
     int: (range) => {
       assertRange(range);
 
-      return Math.floor(next() * (range.max - range.min + 1)) + range.min;
+      return below(range.max - range.min + 1) + range.min;
     },
 
     bool: (probability = 0.5) => next() < probability,
 
-    pick: (items) => {
-      const [first] = items;
-
-      if (first === undefined && items.length === 0) {
+    pick: <T>(items: ReadonlyArray<T>): T => {
+      if (items.length === 0) {
         throw new Error("Cannot pick from an empty list");
       }
 
-      const index = Math.floor(next() * items.length);
-
-      return items[index] as (typeof items)[number];
+      return items[below(items.length)] as T;
     },
 
     pickMany: (items, range) => {
@@ -96,10 +97,10 @@ export function createRandom(seed: number): Random {
       return random.shuffle(items).slice(0, count);
     },
 
-    weighted: (items) => {
+    weighted: <T>(items: ReadonlyArray<Weighted<T>>): T => {
       const total = items.reduce((sum, item) => sum + item.weight, 0);
 
-      if (items.length === 0 || total <= 0) {
+      if (total <= 0) {
         throw new Error("Weighted pick needs at least one positive weight");
       }
 
@@ -113,34 +114,26 @@ export function createRandom(seed: number): Random {
         }
       }
 
-      return (
-        items[items.length - 1] as Weighted<(typeof items)[number]["value"]>
-      ).value;
+      return (items[items.length - 1] as Weighted<T>).value;
     },
 
-    shuffle: (items) => {
+    shuffle: <T>(items: ReadonlyArray<T>): Array<T> => {
       const copy = [...items];
 
       // Fisher-Yates, drawing from the same stream so the order is reproducible.
       for (let index = copy.length - 1; index > 0; index--) {
-        const swap = Math.floor(next() * (index + 1));
-        const held = copy[index] as (typeof copy)[number];
+        const swap = below(index + 1);
+        const held = copy[index] as T;
 
-        copy[index] = copy[swap] as (typeof copy)[number];
+        copy[index] = copy[swap] as T;
         copy[swap] = held;
       }
 
       return copy;
     },
 
-    dateBetween: (from, to) => {
-      const start = from.getTime();
-      const end = to.getTime();
-
-      assertRange({ min: start, max: end });
-
-      return new Date(start + next() * (end - start));
-    },
+    dateBetween: (from, to) =>
+      new Date(random.float({ min: from.getTime(), max: to.getTime() })),
   };
 
   return random;
