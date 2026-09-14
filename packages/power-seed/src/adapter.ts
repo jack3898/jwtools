@@ -68,8 +68,6 @@ export type MemoryAdapterOptions<Target> = {
    * has no read API of its own, since rows come back through handles.
    */
   readonly store?: MemoryStore<Target>;
-  /** Defaults to the target itself when it is a string, otherwise `undefined`. */
-  readonly nameOf?: (target: Target) => string | undefined;
   /**
    * Runs on every row before it is stored and returns what to store. Hand it
    * a schema's `parse` to validate rows, or use it to apply defaults.
@@ -78,12 +76,12 @@ export type MemoryAdapterOptions<Target> = {
     target: Target,
     row: Record<string, unknown>,
   ) => Record<string, unknown>;
-  readonly stamp?: (context: StampContext) => Record<string, unknown>;
 };
 
 /**
  * Keeps rows in memory, keyed by target identity. The zero-dependency default:
- * generate object graphs without a database, or test seeds without one.
+ * generate object graphs without a database, or test seeds without one. A
+ * string target names itself; any other kind needs `name` on the seed.
  */
 export function memoryAdapter<Target = unknown>(
   options: MemoryAdapterOptions<Target> = {},
@@ -91,33 +89,22 @@ export function memoryAdapter<Target = unknown>(
   const store: MemoryStore<Target> = options.store ?? new Map();
 
   function tableFor(target: Target): Map<string, Record<string, unknown>> {
-    const existing = store.get(target);
+    const table =
+      store.get(target) ?? new Map<string, Record<string, unknown>>();
 
-    if (existing) {
-      return existing;
-    }
+    store.set(target, table);
 
-    const created = new Map<string, Record<string, unknown>>();
-
-    store.set(target, created);
-
-    return created;
+    return table;
   }
 
   // The engine hands over private copies, so there is nothing to defend.
   const prepare =
     options.parse ?? ((_target: Target, row: Record<string, unknown>) => row);
 
-  const nameOf =
-    options.nameOf ??
-    ((target: Target): string | undefined =>
-      typeof target === "string" ? target : undefined);
-
   return {
-    nameOf,
+    nameOf: (target) => (typeof target === "string" ? target : undefined),
 
-    stamp: options.stamp,
-
+    // No `present`: nothing here can reject a row, so the count is the truth.
     insert: (target, rows) => {
       const table = tableFor(target);
       let written = 0;
@@ -125,21 +112,13 @@ export function memoryAdapter<Target = unknown>(
       for (const row of rows) {
         const id = String(row.id);
 
-        if (table.has(id)) {
-          continue;
+        if (!table.has(id)) {
+          table.set(id, prepare(target, row));
+          written++;
         }
-
-        table.set(id, prepare(target, row));
-        written++;
       }
 
       return Promise.resolve(written);
-    },
-
-    present: (target, ids) => {
-      const table = tableFor(target);
-
-      return Promise.resolve(ids.filter((id) => table.has(id)));
     },
 
     update: (target, id, values) => {
@@ -147,9 +126,7 @@ export function memoryAdapter<Target = unknown>(
       const existing = table.get(id);
 
       if (!existing) {
-        throw new Error(
-          `No row "${id}" in ${nameOf(target) ?? "target"} to update`,
-        );
+        throw new Error(`No row "${id}" to update`);
       }
 
       table.set(id, prepare(target, { ...existing, ...values }));
