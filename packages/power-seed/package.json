@@ -1,6 +1,6 @@
 {
   "name": "@jack3898/power-seed",
-  "description": "A powerful, type-safe database seeding library.",
+  "description": "Dependency-aware data seeding with zero dependencies. Bring your own schema and driver.",
   "version": "0.1.0",
   "author": "Jack Wright",
   "license": "Apache-2.0",
@@ -35,8 +35,13 @@
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "catalog:",
+    "@faker-js/faker": "catalog:",
+    "drizzle-orm": "catalog:",
+    "expect-type": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "zod": "catalog:"
   },
   "files": [
     "./dist",
@@ -45,7 +50,10 @@
   ],
   "keywords": [
     "database",
+    "deterministic",
+    "drizzle",
     "esm",
+    "factory",
     "fixtures",
     "seed",
     "seeder",
@@ -54,9 +62,7 @@
     "type-safe",
     "utility",
     "vanilla",
-    "deterministic",
-    "orm",
-    "orm-agnostic"
+    "zod"
   ],
   "repository": "jack3898/jwtools.git",
   "types": "./dist/index.d.ts"
