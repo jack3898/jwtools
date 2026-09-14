@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Adapter } from "./adapter";
 import { defineSeed, type Row, type Seed } from "./define";
-import { type SeedReport, seedMany, seedOne } from "./run";
+import { type SeedReport, seed } from "./run";
 
 /**
  * The behaviour every adapter must exhibit, written once and run against each
@@ -58,14 +58,14 @@ export function engineSuite<Target>(
     beforeEach(() => reset());
 
     it("builds every dependency beneath the leaf", async () => {
-      await seedOne(adapter, books);
+      await seed(adapter, [{ seeder: books }]);
 
       expect(await rows(authors)).toHaveLength(3);
       expect(await rows(books)).toHaveLength(6);
     });
 
     it("builds a shared dependency once", async () => {
-      await seedMany(adapter, { books, profiles });
+      await seed(adapter, [{ seeder: books }, { seeder: profiles }]);
 
       expect(await rows(authors)).toHaveLength(3);
       expect(await rows(books)).toHaveLength(6);
@@ -73,22 +73,26 @@ export function engineSuite<Target>(
     });
 
     it("hands back accessors over the rows it wrote", async () => {
-      const handles = await seedMany(adapter, { authors, books });
-      const author = handles.authors.byName("Author 2");
-      const theirs = handles.books.forAuthor(author.id);
+      const [authorHandle, bookHandle] = await seed(adapter, [
+        { seeder: authors },
+        { seeder: books },
+      ]);
+      const author = authorHandle.byName("Author 2");
+      const theirs = bookHandle.forAuthor(author.id);
 
-      expect(handles.authors.first().row.name).toBe("Author 1");
+      expect(authorHandle.first().row.name).toBe("Author 1");
       expect(theirs).toHaveLength(2);
       expect(theirs.every((book) => book.row.authorId === author.id)).toBe(
         true,
       );
     });
 
-    it("applies config by seed name wherever the seed sits", async () => {
-      await seedOne(adapter, books, {
-        authors: { count: 1 },
-        books: { perAuthor: 3 },
-      });
+    it("applies each entry's config to its seed, wherever it sits", async () => {
+      // `authors` is only reached through `books`; listing it configures it.
+      await seed(adapter, [
+        { seeder: authors, config: { count: 1 } },
+        { seeder: books, config: { perAuthor: 3 } },
+      ]);
 
       expect(await rows(authors)).toHaveLength(1);
       expect(await rows(books)).toHaveLength(3);
@@ -96,26 +100,18 @@ export function engineSuite<Target>(
 
     it("rejects a config key the seed does not declare", async () => {
       await expect(
-        seedOne(adapter, books, { authors: { cuont: 1 } }),
+        seed(adapter, [{ seeder: authors, config: { cuont: 1 } }]),
       ).rejects.toThrow(
         'Seed "authors" has no config named: cuont. Accepts: count',
       );
     });
 
-    it("rejects a config key that matches no seed", async () => {
-      await expect(
-        seedOne(adapter, authors, { books: { perAuthor: 1 } }),
-      ).rejects.toThrow(
-        "Seed config keys matched no seed: books. Seeded: authors",
-      );
-    });
-
     it("is a no-op the second time", async () => {
-      await seedOne(adapter, books);
+      await seed(adapter, [{ seeder: books }]);
 
       const before = await rows(books);
 
-      await seedOne(adapter, books);
+      await seed(adapter, [{ seeder: books }]);
 
       expect(await rows(books)).toEqual(before);
       expect(await rows(authors)).toHaveLength(3);
@@ -127,7 +123,7 @@ export function engineSuite<Target>(
         target: authors.target,
         build: () => [],
       });
-      const handle = await seedOne(adapter, empty);
+      const [handle] = await seed(adapter, [{ seeder: empty }]);
 
       expect(() => handle.first()).toThrow('Seed "nothing" produced no rows');
     });
@@ -143,13 +139,13 @@ export function engineSuite<Target>(
         },
       });
 
-      await expect(seedOne(adapter, loop)).rejects.toThrow(
+      await expect(seed(adapter, [{ seeder: loop }])).rejects.toThrow(
         "Seed dependency cycle: loop -> loop",
       );
     });
 
     it("runs links once every seed has inserted", async () => {
-      await seedOne(adapter, books);
+      await seed(adapter, [{ seeder: books }]);
 
       const written = await rows(authors);
       const bookIds = new Set((await rows(books)).map((row) => row.id));
@@ -162,12 +158,12 @@ export function engineSuite<Target>(
     });
 
     it("computes the same ids on a dry run as on a real one", async () => {
-      const dry = await seedOne(adapter, books, {}, { dryRun: true });
+      const [dry] = await seed(adapter, [{ seeder: books }], { dryRun: true });
 
       expect(await rows(books)).toHaveLength(0);
       expect(await rows(authors)).toHaveLength(0);
 
-      const real = await seedOne(adapter, books);
+      const [real] = await seed(adapter, [{ seeder: books }]);
 
       expect(real.all.map((row) => row.id)).toEqual(
         dry.all.map((row) => row.id),
@@ -177,14 +173,9 @@ export function engineSuite<Target>(
     it("reports each target beneath the leaf, deepest first", async () => {
       const reports: Array<SeedReport> = [];
 
-      await seedOne(
-        adapter,
-        books,
-        {},
-        {
-          onSeed: (report) => reports.push(report),
-        },
-      );
+      await seed(adapter, [{ seeder: books }], {
+        onSeed: (report) => reports.push(report),
+      });
 
       expect(reports.map((report) => [report.name, report.rows])).toEqual([
         ["authors", 3],
@@ -196,18 +187,18 @@ export function engineSuite<Target>(
       const titles = async () => (await rows(books)).map((row) => row.title);
       const ids = async () => (await rows(books)).map((row) => row.id);
 
-      await seedOne(adapter, books);
+      await seed(adapter, [{ seeder: books }]);
 
       const firstTitles = await titles();
       const firstIds = await ids();
 
       await harness.reset();
-      await seedOne(adapter, books);
+      await seed(adapter, [{ seeder: books }]);
 
       expect(await titles()).toEqual(firstTitles);
 
       await harness.reset();
-      await seedOne(adapter, books, {}, { seed: 7 });
+      await seed(adapter, [{ seeder: books }], { seed: 7 });
 
       expect(await titles()).not.toEqual(firstTitles);
       // Ids derive from identity, never from the random stream.
@@ -215,16 +206,13 @@ export function engineSuite<Target>(
     });
 
     it("derives ids within the run's namespace", async () => {
-      const first = await seedOne(adapter, authors, {}, { dryRun: true });
-      const second = await seedOne(
-        adapter,
-        authors,
-        {},
-        {
-          dryRun: true,
-          namespace: "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14",
-        },
-      );
+      const [first] = await seed(adapter, [{ seeder: authors }], {
+        dryRun: true,
+      });
+      const [second] = await seed(adapter, [{ seeder: authors }], {
+        dryRun: true,
+        namespace: "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14",
+      });
 
       expect(first.all.map((row) => row.id)).not.toEqual(
         second.all.map((row) => row.id),

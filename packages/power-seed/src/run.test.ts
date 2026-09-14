@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Adapter } from "./adapter";
 import { type MemoryStore, memoryAdapter } from "./adapter";
 import { defineSeed } from "./define";
-import { seedMany, seedOne } from "./run";
+import { seed } from "./run";
 
 /** A stub whose insert claims to have dropped the last row offered. */
 function droppingAdapter(present: boolean): Adapter<string> {
@@ -26,13 +26,17 @@ const pair = defineSeed({
 
 describe("the insert check", () => {
   it("rejects rows the adapter reports as dropped and absent", async () => {
-    await expect(seedOne(droppingAdapter(true), pair)).rejects.toThrow(
+    await expect(
+      seed(droppingAdapter(true), [{ seeder: pair }]),
+    ).rejects.toThrow(
       'Seed "things" offered 2 rows to things but 1 are not in it',
     );
   });
 
   it("trusts the adapter when it cannot say which rows are present", async () => {
-    await expect(seedOne(droppingAdapter(false), pair)).resolves.toBeDefined();
+    await expect(
+      seed(droppingAdapter(false), [{ seeder: pair }]),
+    ).resolves.toBeDefined();
   });
 
   it("trusts an adapter that cannot count", async () => {
@@ -43,7 +47,7 @@ describe("the insert check", () => {
       update: () => Promise.resolve(),
     };
 
-    await expect(seedOne(adapter, pair)).resolves.toBeDefined();
+    await expect(seed(adapter, [{ seeder: pair }])).resolves.toBeDefined();
   });
 });
 
@@ -58,7 +62,7 @@ describe("dry runs", () => {
       link: ({ rows, update }) => update(rows[0]?.id ?? "", { value: 2 }),
     });
 
-    await seedOne(adapter, linked, {}, { dryRun: true });
+    await seed(adapter, [{ seeder: linked }], { dryRun: true });
 
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
@@ -72,7 +76,7 @@ describe("ids", () => {
       target: "named",
       build: () => [{ id: "chosen", value: 1 }, { value: 2 }],
     });
-    const handle = await seedOne(adapter, named);
+    const [handle] = await seed(adapter, [{ seeder: named }]);
 
     expect(handle.all[0]?.id).toBe("chosen");
     expect(handle.all[1]?.id).toMatch(/^[0-9a-f-]{36}$/);
@@ -80,15 +84,10 @@ describe("ids", () => {
 
   it("can derive through a custom function", async () => {
     const adapter = memoryAdapter<string>();
-    const handle = await seedOne(
-      adapter,
-      pair,
-      {},
-      {
-        id: ({ target, key, namespace }) => `${namespace}/${target}/${key}`,
-        namespace: "ns",
-      },
-    );
+    const [handle] = await seed(adapter, [{ seeder: pair }], {
+      id: ({ target, key, namespace }) => `${namespace}/${target}/${key}`,
+      namespace: "ns",
+    });
 
     expect(handle.all.map((row) => row.id)).toEqual([
       "ns/things/things#0",
@@ -98,15 +97,18 @@ describe("ids", () => {
 
   it("derive from the raw target name, so a renamed seed keeps them", async () => {
     const adapter = memoryAdapter<string>();
-    const plain = await seedOne(adapter, pair, {}, { dryRun: true });
-    const renamed = await seedOne(
+    const [plain] = await seed(adapter, [{ seeder: pair }], { dryRun: true });
+    const [renamed] = await seed(
       adapter,
-      defineSeed({
-        target: "things",
-        name: "renamed",
-        build: () => [{ n: 1 }],
-      }),
-      {},
+      [
+        {
+          seeder: defineSeed({
+            target: "things",
+            name: "renamed",
+            build: () => [{ n: 1 }],
+          }),
+        },
+      ],
       { dryRun: true },
     );
 
@@ -115,17 +117,20 @@ describe("ids", () => {
     expect(plain.first().id).not.toBe(renamed.first().id);
     expect(renamed.first().id).toBe(
       (
-        await seedOne(
+        await seed(
           adapter,
-          defineSeed({
-            target: "things",
-            name: "renamed",
-            build: () => [{ n: 9 }],
-          }),
-          {},
+          [
+            {
+              seeder: defineSeed({
+                target: "things",
+                name: "renamed",
+                build: () => [{ n: 9 }],
+              }),
+            },
+          ],
           { dryRun: true },
         )
-      ).first().id,
+      )[0].first().id,
     );
   });
 });
@@ -153,7 +158,7 @@ describe("links", () => {
       },
     });
 
-    await seedOne(adapter, outer);
+    await seed(adapter, [{ seeder: outer }]);
 
     expect(order).toEqual(["outer link", "inner link"]);
     expect(store.get("inner")?.size).toBe(1);
@@ -190,15 +195,18 @@ describe("handles", () => {
     const store: MemoryStore<string> = new Map();
     const adapter = memoryAdapter<string>({ store });
 
-    const world = await seedMany(adapter, { players, teams });
+    const [playerHandle, teamHandle] = await seed(adapter, [
+      { seeder: players },
+      { seeder: teams },
+    ]);
 
-    expect(world.players.all.map((player) => player.row.captain)).toEqual([
+    expect(playerHandle.all.map((player) => player.row.captain)).toEqual([
       true,
       true,
     ]);
-    expect(world.teams.names()).toEqual(["Crimson", "Blue"]);
+    expect(teamHandle.names()).toEqual(["Crimson", "Blue"]);
     // What the handle says is what was stored.
-    expect(store.get("teams")?.get(world.teams.first().id)?.name).toBe(
+    expect(store.get("teams")?.get(teamHandle.first().id)?.name).toBe(
       "Crimson",
     );
   });
@@ -207,14 +215,44 @@ describe("handles", () => {
     const store: MemoryStore<string> = new Map();
     const adapter = memoryAdapter<string>({ store });
 
-    const world = await seedMany(
+    const [, teamHandle] = await seed(
       adapter,
-      { players, teams },
-      {},
+      [{ seeder: players }, { seeder: teams }],
       { dryRun: true },
     );
 
-    expect(world.teams.names()).toEqual(["Crimson", "Blue"]);
+    expect(teamHandle.names()).toEqual(["Crimson", "Blue"]);
     expect(store.size).toBe(0);
+  });
+});
+
+describe("config", () => {
+  it("merges nested objects and replaces arrays", async () => {
+    const adapter = memoryAdapter<string>();
+    const seen: Array<unknown> = [];
+    const configured = defineSeed({
+      target: "configured",
+      defaults: { range: { min: 1, max: 5 }, weights: [1, 2, 3] },
+      build: ({ config }) => {
+        seen.push(config);
+
+        return [];
+      },
+    });
+
+    await seed(adapter, [
+      { seeder: configured, config: { range: { max: 9 }, weights: [7] } },
+    ]);
+
+    expect(seen).toEqual([{ range: { min: 1, max: 9 }, weights: [7] }]);
+  });
+
+  it("rejects a seed listed twice, since it can only take one config", async () => {
+    const adapter = memoryAdapter<string>();
+    const things = defineSeed({ target: "things", build: () => [] });
+
+    await expect(
+      seed(adapter, [{ seeder: things }, { seeder: things }]),
+    ).rejects.toThrow('Seed "things" is listed twice');
   });
 });

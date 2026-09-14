@@ -23,7 +23,7 @@ import {
   defineSeed as define,
   type SeedConfig,
   type SeedDefinition,
-  seedOne,
+  seed,
 } from "./index";
 
 /** The README's Drizzle block, verbatim: pins the row type to the table. */
@@ -249,14 +249,9 @@ describe("drizzle specifics", () => {
   it("names seeds after their table in camelCase", async () => {
     const reports: Array<string> = [];
 
-    await seedOne(
-      adapter,
-      profiles,
-      {},
-      {
-        onSeed: (report) => reports.push(`${report.name}:${report.target}`),
-      },
-    );
+    await seed(adapter, [{ seeder: profiles }], {
+      onSeed: (report) => reports.push(`${report.name}:${report.target}`),
+    });
 
     expect(reports).toEqual(["authors:authors", "profiles:profiles"]);
   });
@@ -268,7 +263,7 @@ describe("drizzle specifics", () => {
       build: () => [{ name: "Twin" }, { name: "Twin" }],
     });
 
-    await expect(seedOne(adapter, duplicates)).rejects.toThrow(
+    await expect(seed(adapter, [{ seeder: duplicates }])).rejects.toThrow(
       'Seed "duplicates" offered 2 rows to authors but 1 are not in it',
     );
   });

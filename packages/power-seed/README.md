@@ -17,7 +17,7 @@ Any runtime with ESM support. The package has no dependencies and touches no pla
 ## The idea in one file
 
 ```ts
-import { defineSeed, memoryAdapter, seedOne } from "@jack3898/power-seed";
+import { defineSeed, memoryAdapter, seed } from "@jack3898/power-seed";
 
 const teams = defineSeed({
   target: "teams",
@@ -45,14 +45,16 @@ const players = defineSeed({
 });
 
 const adapter = memoryAdapter<string>();
-const handle = await seedOne(adapter, players, { players: { perTeam: 2 } });
+const [handle] = await seed(adapter, [
+  { seeder: players, config: { perTeam: 2 } },
+]);
 
 handle.all; // every player row, with its id
 ```
 
 Three things happened there:
 
-- **`players` pulled `teams` in** by calling `get(teams)`. There is no dependency list to keep in sync with the code. To get the `teams` handle back as well, ask for both with `seedMany`.
+- **`players` pulled `teams` in** by calling `get(teams)`. There is no dependency list to keep in sync with the code. To get the `teams` handle back as well, list it as an entry too.
 - **Every row got a stable id** derived from its seed name and index. Run it again and the same ids are offered, and the adapter keeps the rows already there.
 - **`random.int` drew from a stream seeded once for the run.** The same seed gives the same ratings, every time, on every machine.
 
@@ -268,10 +270,9 @@ const people = defineSeed({
     Array.from({ length: 10 }, () => ({ name: faker.person.fullName() })),
 });
 
-await seedOne(
+await seed(
   adapter,
-  people,
-  {},
+  [{ seeder: people }],
   {
     extend: ({ seed }) => {
       const faker = new Faker({ locale: [en] });
@@ -296,10 +297,9 @@ A run is reproducible when every value derives from the run's inputs. The rules:
 - **Ids never depend on the random stream.** They come from the seed name and row index, so changing the seed changes values but not ids, and growing a list keeps the ids of the rows that were already there.
 
 ```ts
-await seedOne(
+await seed(
   adapter,
-  players,
-  {},
+  [{ seeder: players }],
   {
     seed: 42, // random stream
     now: new Date("2026-01-01T00:00:00Z"), // the anchor every date derives from
@@ -311,16 +311,16 @@ Both default to fixed values, so a run with no options is reproducible too.
 
 ## Config
 
-`defaults` declares every key a seed accepts. Callers override by seed name, wherever the seed sits in the tree:
+`defaults` declares every key a seed accepts. Each entry's `config` is typed from its seeder. A seed reached only through another is configured by listing it too:
 
 ```ts
-await seedOne(adapter, players, {
-  teams: { names: ["Gold"] },
-  players: { perTeam: 1 },
-});
+await seed(adapter, [
+  { seeder: teams, config: { names: ["Gold"] } },
+  { seeder: players, config: { perTeam: 1 } },
+]);
 ```
 
-Nested objects merge, so `{ ages: { max: 40 } }` keeps the default `min`. Arrays replace, because a partial weighting table means nothing. A key no seed declares is an error, and so is a top-level key no seed in the run claimed, so a typo cannot silently apply to nothing.
+Nested objects merge, so `{ ages: { max: 40 } }` keeps the default `min`. Arrays replace, because a partial weighting table means nothing. A key the seed does not declare is an error, at compile time and again at runtime, so a typo cannot silently apply to nothing.
 
 ## Handles and accessors
 
@@ -366,8 +366,13 @@ const books = defineSeed({
 ## Dry runs
 
 ```ts
-const foundation = { tenants, sites, roles, users };
-const handles = await seedMany(adapter, foundation, {}, { dryRun: true });
+const foundation = [
+  { seeder: tenants },
+  { seeder: sites },
+  { seeder: roles },
+  { seeder: users },
+] as const;
+const handles = await seed(adapter, foundation, { dryRun: true });
 ```
 
 Nothing is written, but the handles name exactly the rows a real run inserts. A test suite can take handles at module level for free and do the only actual seeding in `beforeEach`.
@@ -375,10 +380,9 @@ Nothing is written, but the handles name exactly the rows a real run inserts. A 
 ## Reports
 
 ```ts
-await seedOne(
+await seed(
   adapter,
-  players,
-  {},
+  [{ seeder: players }],
   {
     onSeed: ({ name, target, rows }) =>
       console.log(`${name} -> ${target}: ${rows} rows`),
@@ -407,18 +411,19 @@ The implementation ships its own SHA-1, forty lines that never change, so no cry
 
 ## Running
 
-| Function                                             | Use it when                                                                                 |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `seedOne(adapter, seed, config?, options?)`          | You want one leaf and everything beneath it, and its handle back.                           |
-| `seedMany(adapter, { ...seeds }, config?, options?)` | You want several leaves seeded against one run, and their handles back under the same keys. |
+One call. Every entry is seeded, with everything beneath it, against one run, and its handle comes back in the same position:
 
 ```ts
-const world = await seedMany(adapter, { publishers, authors, books }, config);
+const [publisherHandle, authorHandle, bookHandle] = await seed(adapter, [
+  { seeder: publishers },
+  { seeder: authors },
+  { seeder: books },
+]);
 
-world.books.forAuthor(world.authors.first().id); // every handle keeps its accessors
+bookHandle.forAuthor(authorHandle.first().id); // every handle keeps its accessors
 ```
 
-Both share one run, so a seed that two leaves depend on is built once. A reusable set of seeds is just an object to spread: `seedMany(adapter, { ...foundation, mine })`. When a seed needs extras, `config` and `options` stop being optional.
+Entries share one run, so a seed two of them depend on is built once. A reusable set of entries is just an array to spread: `seed(adapter, [...foundation, { seeder: mine }])`. When a seed needs extras, `options` stops being optional.
 
 ## Stability
 

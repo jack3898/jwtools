@@ -8,7 +8,7 @@ import {
   memoryAdapter,
   type SeedConfig,
   type SeedDefinition,
-  seedOne,
+  seed,
 } from "./index";
 
 /** The README's Zod block, verbatim: pins the row type to the schema's input. */
@@ -138,7 +138,9 @@ describe("zod specifics", () => {
       build: () => [{ name: "ab" }],
     });
 
-    await expect(seedOne(adapter, tooShort)).rejects.toThrow(/Too small/);
+    await expect(seed(adapter, [{ seeder: tooShort }])).rejects.toThrow(
+      /Too small/,
+    );
   });
 
   it("requires a name, since a schema has none", async () => {
@@ -147,7 +149,7 @@ describe("zod specifics", () => {
       build: () => [{}],
     });
 
-    await expect(seedOne(adapter, anonymous)).rejects.toThrow(
+    await expect(seed(adapter, [{ seeder: anonymous }])).rejects.toThrow(
       "A seed on a target the adapter cannot name must set `name`",
     );
   });
@@ -180,15 +182,18 @@ describe("zod specifics", () => {
     const names = (rows: ReadonlyArray<{ row: { name: string } }>) =>
       rows.map(({ row }) => row.name);
 
-    const first = await seedOne(adapter, people, {}, { extend });
+    const [first] = await seed(adapter, [{ seeder: people }], { extend });
 
     store.clear();
 
-    const again = await seedOne(adapter, people, {}, { extend });
+    const [again] = await seed(adapter, [{ seeder: people }], { extend });
 
     store.clear();
 
-    const other = await seedOne(adapter, people, {}, { extend, seed: 2 });
+    const [other] = await seed(adapter, [{ seeder: people }], {
+      extend,
+      seed: 2,
+    });
 
     expect(names(again.all)).toEqual(names(first.all));
     expect(names(other.all)).not.toEqual(names(first.all));

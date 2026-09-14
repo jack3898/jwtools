@@ -13,6 +13,7 @@ export type {
   Handle,
   HandleOf,
   LinkArgs,
+  Overrides,
   Row,
   Seed,
   SeedConfig,
@@ -28,13 +29,13 @@ export type {
   IdContext,
   RunArgs,
   RunOptions,
+  SeedEntry,
   SeedReport,
 } from "./run";
 export {
   DEFAULT_NAMESPACE,
   FIXED_NOW,
   FIXED_SEED,
-  seedMany,
-  seedOne,
+  seed,
 } from "./run";
 export { uuidV5 } from "./uuid";

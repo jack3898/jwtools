@@ -56,10 +56,13 @@ export type Seed<
   Insert extends object,
   A extends object,
   X extends object = object,
+  C extends SeedConfig = SeedConfig,
 > = {
   readonly name: string | undefined;
   readonly target: Target;
   readonly namespace: string | undefined;
+  /** Carried so an entry's `config` can be typed from its seeder. */
+  readonly defaults: C | undefined;
   readonly resolve: (
     run: Run<X>,
     config: SeedConfig,
@@ -82,7 +85,6 @@ export type Run<X extends object> = {
     values: object,
   ) => Promise<void>;
   readonly configFor: (parent: SeedConfig, name: string) => SeedConfig;
-  readonly assertConfigWasUsed: (config: SeedConfig) => void;
   readonly get: (config: SeedConfig) => Get<X>;
   readonly enter: (name: string) => void;
   readonly leave: () => void;
@@ -178,7 +180,7 @@ export function defineSeed<
   X extends object = object,
 >(
   definition: SeedDefinition<Target, Insert, C, A, X>,
-): Seed<Target, Insert, A, X> & { readonly defaults: C | undefined } {
+): Seed<Target, Insert, A, X, C> {
   // Inside the closure, so it already knows this seed's types and the engine
   // needs no assertion to read them back.
   const cache = new WeakMap<Run<X>, Promise<Handle<Insert, A>>>();
@@ -187,7 +189,6 @@ export function defineSeed<
     name: definition.name,
     target: definition.target,
     namespace: definition.namespace,
-    /** Carried so `ConfigOf<typeof thisSeed>` can read the config's shape. */
     defaults: definition.defaults,
     resolve: (run: Run<X>, config: SeedConfig): Promise<Handle<Insert, A>> => {
       const cached = cache.get(run);
@@ -305,19 +306,31 @@ export type HandleOf<S> =
     ? Handle<Insert, A>
     : never;
 
+/**
+ * Every key optional, nested plain objects included, because nested objects
+ * merge. Arrays are left whole, because they replace.
+ */
+export type Overrides<C> = {
+  readonly [K in keyof C]?: C[K] extends
+    | ReadonlyArray<unknown>
+    | ((...args: never) => unknown)
+    ? C[K]
+    : C[K] extends object
+      ? Overrides<C[K]>
+      : C[K];
+};
+
 /** A seed's config, from its own defaults, with every key optional. */
-export type ConfigOf<S> = S extends { defaults?: infer C }
-  ? Partial<NonNullable<C>>
-  : never;
+export type ConfigOf<S> =
+  S extends Seed<unknown, object, object, never, infer C>
+    ? Overrides<C>
+    : never;
 
 /**
  * The engine carries config as an untyped record; `ConfigOf` types it for the
  * caller. This is the one seam that hands the seed back its own `C`: the key
- * check is what makes the cast true, so they live together.
- *
- * `assertConfigWasUsed` only sees the top level, so without the check a
- * misspelt key inside a seed's own config reads as a silent request for the
- * default.
+ * check is what makes the cast true, so they live together. Without the
+ * check, a misspelt key would read as a silent request for the default.
  */
 function resolveConfig<C extends SeedConfig>(
   name: string,

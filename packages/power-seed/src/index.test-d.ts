@@ -15,8 +15,7 @@ import {
   type Row,
   type SeedConfig,
   type SeedDefinition,
-  seedMany,
-  seedOne,
+  seed,
 } from ".";
 
 // Local no-op harness purely for grouping. The bodies are never executed; `tsc`
@@ -50,8 +49,8 @@ describe("defineSeed", () => {
 
   it("exposes config with every key optional", () => {
     expectTypeOf<ConfigOf<typeof people>>().toEqualTypeOf<{
-      count?: number;
-      ages?: { min: number; max: number };
+      readonly count?: number;
+      readonly ages?: { readonly min?: number; readonly max?: number };
     }>();
   });
 
@@ -112,10 +111,10 @@ describe("extras", () => {
 
   it("must be supplied when a seed needs them", () => {
     // @ts-expect-error extend is required when the seed needs extras
-    void seedOne(adapter, words);
-    void seedOne(adapter, words, {}, { extend });
-    void seedOne(adapter, people, {}, { extend });
-    void seedOne(adapter, people);
+    void seed(adapter, [{ seeder: words }]);
+    void seed(adapter, [{ seeder: words }], { extend });
+    void seed(adapter, [{ seeder: people }], { extend });
+    void seed(adapter, [{ seeder: people }]);
   });
 
   it("flow down the tree but never up", () => {
@@ -135,22 +134,31 @@ describe("extras", () => {
     });
   });
 
-  it("are checked across every seed in seedMany", () => {
-    void seedMany(adapter, { people, words }, {}, { extend });
+  it("are checked across every seed in seed", () => {
+    void seed(adapter, [{ seeder: people }, { seeder: words }], { extend });
     // @ts-expect-error extend is required when any seed needs extras
-    void seedMany(adapter, { people, words });
+    void seed(adapter, [{ seeder: people }, { seeder: words }]);
   });
 });
 
-describe("seedMany", () => {
-  it("returns every handle under the key it was given", async () => {
-    const handles = await seedMany(adapter, { folks: people });
+describe("seed", () => {
+  it("returns one handle per entry, in entry order", async () => {
+    const handles = await seed(adapter, [{ seeder: people }]);
 
-    expectTypeOf(handles.folks.names()).toEqualTypeOf<Array<string>>();
-    expectTypeOf(handles.folks.first().row.age).toEqualTypeOf<number>();
-    expectTypeOf(handles).toHaveProperty("folks");
-    // @ts-expect-error only the keys that went in come out
-    handles.people;
+    expectTypeOf(handles.length).toEqualTypeOf<1>();
+    expectTypeOf(handles[0].names()).toEqualTypeOf<Array<string>>();
+    expectTypeOf(handles[0].first().row.age).toEqualTypeOf<number>();
+    // @ts-expect-error only as many handles as entries
+    handles[1];
+  });
+
+  it("types each entry's config from its seeder", () => {
+    void seed(adapter, [{ seeder: people, config: { count: 1 } }]);
+    void seed(adapter, [{ seeder: people, config: { ages: { max: 40 } } }]);
+    // @ts-expect-error a key the seed does not declare
+    void seed(adapter, [{ seeder: people, config: { cuont: 1 } }]);
+    // @ts-expect-error the wrong type for a declared key
+    void seed(adapter, [{ seeder: people, config: { count: "1" } }]);
   });
 });
 
@@ -159,7 +167,7 @@ describe("adapters", () => {
     const objects = memoryAdapter<{ readonly table: string }>();
 
     // @ts-expect-error a seed on a string target cannot run through an adapter for objects
-    void seedOne(objects, people);
+    void seed(objects, [{ seeder: people }]);
   });
 
   it("expose nothing beyond the adapter contract", () => {

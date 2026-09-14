@@ -1,7 +1,7 @@
 import type { Adapter } from "./adapter";
 import type {
+  ConfigOf,
   Get,
-  Handle,
   HandleOf,
   Run,
   Seed,
@@ -68,21 +68,12 @@ export type RunOptions<X extends object = object> = BaseRunOptions<X> &
   ExtendRequirement<X>;
 
 /**
- * The trailing arguments of `seedOne` and `seedMany`. Optional until a seed
- * needs extras, at which point leaving them off would skip `extend` unnoticed.
+ * The trailing argument of `seed`. Optional until a seed needs extras, at
+ * which point leaving it off would skip `extend` unnoticed.
  */
 export type RunArgs<X extends object> = object extends X
-  ? [config?: SeedConfig, options?: RunOptions<X>]
-  : [config: SeedConfig, options: RunOptions<X>];
-
-function splitArgs<X extends object>(
-  args: RunArgs<X>,
-): [SeedConfig, BaseRunOptions<X>] {
-  // The conditional keeps callers honest; by here both shapes are the same.
-  const [config, options] = args as [SeedConfig?, BaseRunOptions<X>?];
-
-  return [config ?? {}, options ?? {}];
-}
+  ? [options?: RunOptions<X>]
+  : [options: RunOptions<X>];
 
 /** `week_number_systems` -> `weekNumberSystems`, so config keys read naturally. */
 function camelCase(value: string): string {
@@ -101,8 +92,6 @@ function createRun<Target, X extends object>(
   const random = createRandom(seed);
   const extras = options.extend?.({ seed, now });
   const stack: Array<string> = [];
-  /** Every seed name this run resolved, for the unused-config check. */
-  const seen = new Set<string>();
   const links: Array<() => Promise<void>> = [];
   /**
    * The row objects handles hold, by id, by target. A link's update lands on
@@ -224,8 +213,6 @@ function createRun<Target, X extends object>(
     },
 
     configFor: (parent, name) => {
-      seen.add(name);
-
       const nested = parent[name];
 
       return typeof nested === "object" &&
@@ -249,17 +236,6 @@ function createRun<Target, X extends object>(
         return dependency.resolve(run, config);
       },
 
-    /** A key nothing claimed is a typo that would otherwise apply to nothing. */
-    assertConfigWasUsed: (config) => {
-      const unused = Object.keys(config).filter((key) => !seen.has(key));
-
-      if (unused.length > 0) {
-        throw new Error(
-          `Seed config keys matched no seed: ${unused.join(", ")}. Seeded: ${[...seen].sort().join(", ")}`,
-        );
-      }
-    },
-
     enter: (name) => {
       stack.push(name);
     },
@@ -276,61 +252,55 @@ function defaultId({ target, key, namespace }: IdContext): string {
   return uuidV5(`${target}:${key}`, namespace);
 }
 
+/** One seed to run, with the overrides for its `defaults`. */
+export type SeedEntry<S> = {
+  readonly seeder: S;
+  /** Typed from the seeder. A key it does not declare is an error. */
+  readonly config?: ConfigOf<S> | undefined;
+};
+
+/** The handles `seed` returns, one per entry, in entry order. */
+export type Handles<S extends ReadonlyArray<unknown>> = {
+  readonly [K in keyof S]: HandleOf<S[K]>;
+};
+
 /**
- * Seed `target` and everything it asks for. `config` is keyed by seed name,
- * `{ users: { perSite: 20 } }`, wherever that seed sits in the tree.
+ * Seed every entry, and everything each asks for, against one run. Entries
+ * share what is beneath them, so a seed two of them depend on is built once.
+ * A seed reached only through another is configured by listing it too.
  */
-export async function seedOne<
+export async function seed<
   Target,
-  Insert extends object,
-  A extends object,
+  const S extends ReadonlyArray<Seed<NoInfer<Target>, object, object, X>>,
   X extends object = object,
 >(
   adapter: Adapter<Target>,
-  target: Seed<NoInfer<Target>, Insert, A, X>,
-  ...args: RunArgs<X>
-): Promise<Handle<Insert, A>> {
-  const [config, options] = splitArgs(args);
-  const shared = createRun(adapter, options);
-  const handle = await target.resolve(shared, config);
-
-  await shared.runLinks();
-
-  shared.assertConfigWasUsed(config);
-
-  return handle;
-}
-
-/** The handles `seedMany` returns, under the keys the seeds came in with. */
-export type Handles<S> = { readonly [K in keyof S]: HandleOf<S[K]> };
-
-/**
- * Seed several leaves against one run, so they share what is beneath them,
- * and get every handle back under the key it was given. Seeding each
- * separately would build shared dependencies once per call and trip
- * `assertConfigWasUsed`, which rejects keys the narrower target never claims.
- */
-export async function seedMany<
-  Target,
-  S extends Record<string, Seed<NoInfer<Target>, object, object, X>>,
-  X extends object = object,
->(
-  adapter: Adapter<Target>,
-  seeds: S & Record<string, Seed<NoInfer<Target>, object, object, X>>,
+  entries: { readonly [K in keyof S]: SeedEntry<S[K]> },
   ...args: RunArgs<X>
 ): Promise<Handles<S>> {
-  const [config, options] = splitArgs(args);
-  const shared = createRun(adapter, options);
-  const handles: Record<string, unknown> = {};
+  // The conditional keeps callers honest; by here both shapes are the same.
+  const [options] = args as [BaseRunOptions<X>?];
+  const shared = createRun(adapter, options ?? {});
+  const config: Record<string, SeedConfig> = {};
 
-  for (const [key, seed] of Object.entries(seeds)) {
-    handles[key] = await seed.resolve(shared, config);
+  for (const entry of entries) {
+    const name = shared.nameOf(entry.seeder);
+
+    if (config[name] !== undefined) {
+      throw new Error(`Seed "${name}" is listed twice`);
+    }
+
+    config[name] = entry.config ?? {};
+  }
+
+  const handles: Array<unknown> = [];
+
+  for (const entry of entries) {
+    handles.push(await entry.seeder.resolve(shared, config));
   }
 
   await shared.runLinks();
 
-  shared.assertConfigWasUsed(config);
-
-  // Built key by key from `seeds`, so the shape is the mapped type's.
+  // Built entry by entry, so the shape is the mapped type's.
   return handles as Handles<S>;
 }
