@@ -70,7 +70,8 @@ export type Run<X extends object> = {
   ) => Promise<void>;
   readonly update: (row: object, values: object) => Promise<void>;
   readonly configOf: (seed: SeedMeta) => SeedConfig;
-  readonly get: Get<X>;
+  /** A `get` for a seed's build, or an unguarded one for the run itself. */
+  readonly getFor: (from?: SeedMeta) => Get<X>;
   readonly defer: (link: () => Promise<void>) => void;
   readonly runLinks: () => Promise<void>;
 };
@@ -162,7 +163,11 @@ export function seeder<
     const name = run.nameOf(seed);
     const toolkit = run.toolkit(seed);
     // Checked against the defaults when planted, so the cast holds.
-    const args = { ...toolkit, config: run.configOf(seed) as C, get: run.get };
+    const args = {
+      ...toolkit,
+      config: run.configOf(seed) as C,
+      get: run.getFor(seed),
+    };
     const built = await definition.build(args);
 
     // A link's update lands on these, so a dependent holding one sees it.
@@ -176,7 +181,9 @@ export function seeder<
     const { link } = definition;
 
     if (link) {
-      run.defer(() => link({ ...args, rows: written, update: run.update }));
+      run.defer(() =>
+        link({ ...args, get: run.getFor(), rows: written, update: run.update }),
+      );
     }
 
     // With no accessors defined, `A` is inferred as `object`, so `{}` is one.

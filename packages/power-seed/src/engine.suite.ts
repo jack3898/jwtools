@@ -216,6 +216,96 @@ export function engineSuite<Target>(
       );
     });
 
+    it("lets a builder get two seeds at once when one needs the other", async () => {
+      const inner = seeder({
+        name: "inner",
+        target: authors.target,
+        build: () => [],
+      });
+      const outer = seeder({
+        name: "outer",
+        target: authors.target,
+        build: async ({ get }) => {
+          await get(inner);
+
+          return [];
+        },
+      });
+      const both = seeder({
+        name: "both",
+        target: authors.target,
+        build: async ({ get }) => {
+          await Promise.all([get(inner), get(outer)]);
+
+          return [];
+        },
+      });
+
+      await expect(plant(adapter, [both])).resolves.toBeDefined();
+    });
+
+    it("reports a cycle between two seeds", async () => {
+      const left: Seed<Target, object, object> = seeder({
+        name: "left",
+        target: authors.target,
+        build: async ({ get }) => {
+          await get(right);
+
+          return [];
+        },
+      });
+      const right: Seed<Target, object, object> = seeder({
+        name: "right",
+        target: authors.target,
+        build: async ({ get }) => {
+          await get(left);
+
+          return [];
+        },
+      });
+
+      await expect(plant(adapter, [left])).rejects.toThrow(
+        "Seed dependency cycle: left -> right -> left",
+      );
+    });
+
+    it("reports a cycle however its two sides interleave", async () => {
+      const left: Seed<Target, object, object> = seeder({
+        name: "left",
+        target: authors.target,
+        build: async ({ get }) => {
+          await get(right);
+
+          return [];
+        },
+      });
+      const right: Seed<Target, object, object> = seeder({
+        name: "right",
+        target: authors.target,
+        build: async ({ get }) => {
+          // Yields first, so `left` is already awaiting `right` when it asks.
+          await Promise.resolve();
+          await get(left);
+
+          return [];
+        },
+      });
+      const both = seeder({
+        name: "both",
+        target: authors.target,
+        build: async ({ get }) => {
+          await Promise.all([get(right), get(left)]);
+
+          return [];
+        },
+      });
+
+      // A missed cycle hangs rather than throws, hence the short timeout.
+      await expect(plant(adapter, [both])).rejects.toThrow(
+        "Seed dependency cycle: left -> right -> left",
+      );
+    }, 2000);
+
     it("runs links once every seed has inserted", async () => {
       await plant(adapter, [books]);
 

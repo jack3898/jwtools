@@ -75,8 +75,14 @@ function createRun<Target, X extends object>(
   const seed = options.seed ?? FIXED_SEED;
   const now = options.now ?? FIXED_NOW;
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
-  const stack: Array<string> = [];
   const links: Array<() => Promise<void>> = [];
+  /**
+   * Who is awaiting whom, by name. A cycle is a path from a dependency back
+   * to its asker, however the asks interleave. Edges are never removed: a
+   * settled seed's edges cannot lead to one still building, so they never
+   * mislead.
+   */
+  const waiting = new Map<string, Set<string>>();
   /** Which seed built each row a handle holds, so `update` knows its target. */
   const owners = new WeakMap<object, SeedMeta>();
   /** Keys written per target, kept on a dry run too so it fails the same. */
@@ -108,6 +114,28 @@ function createRun<Target, X extends object>(
    */
   function targetNameOf(meta: SeedMeta): string {
     return adapter.nameOf(targetOf(meta)) ?? nameOf(meta);
+  }
+
+  function pathTo(
+    from: string,
+    to: string,
+    seen = new Set<string>(),
+  ): Array<string> | undefined {
+    if (from === to) {
+      return [from];
+    }
+
+    seen.add(from);
+
+    for (const next of waiting.get(from) ?? []) {
+      const rest = seen.has(next) ? undefined : pathTo(next, to, seen);
+
+      if (rest) {
+        return [from, ...rest];
+      }
+    }
+
+    return undefined;
   }
 
   const run: Run<X> = {
@@ -222,24 +250,31 @@ function createRun<Target, X extends object>(
 
     configOf: (meta) => configs.get(meta) ?? meta.defaults ?? {},
 
-    // A seed that asks for one still on the stack, itself included, is a
-    // cycle. Links run with an empty stack, so they may ask for anything.
-    get: async (dependency) => {
-      const name = nameOf(dependency);
-
-      if (stack.includes(name)) {
-        throw new Error(
-          `Seed dependency cycle: ${[...stack, name].join(" -> ")}`,
-        );
+    // The run itself and links ask unguarded: nothing awaits them, so they
+    // cannot close a cycle.
+    getFor: (from) => {
+      if (from === undefined) {
+        return (dependency) => dependency.resolve(run);
       }
 
-      stack.push(name);
+      const asker = nameOf(from);
 
-      try {
-        return await dependency.resolve(run);
-      } finally {
-        stack.pop();
-      }
+      return (dependency) => {
+        const name = nameOf(dependency);
+        const cycle = pathTo(name, asker);
+
+        if (cycle) {
+          throw new Error(
+            `Seed dependency cycle: ${[...cycle, name].join(" -> ")}`,
+          );
+        }
+
+        const edges = waiting.get(asker) ?? new Set<string>();
+
+        waiting.set(asker, edges.add(name));
+
+        return dependency.resolve(run);
+      };
     },
   };
 
@@ -343,9 +378,10 @@ export async function plant<
   }
 
   const handles = new Map<object, unknown>();
+  const get = shared.getFor();
 
   for (const seeder of seeders) {
-    handles.set(seeder, await shared.get(seeder));
+    handles.set(seeder, await get(seeder));
   }
 
   await shared.runLinks();
