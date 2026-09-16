@@ -3,12 +3,7 @@ import type { Adapter } from "./adapter";
 import { plant, type SeedReport } from "./plant";
 import { type Seed, seeder } from "./seeder";
 
-/**
- * The behaviour every adapter must exhibit, written once and run against each
- * storage layer. A harness supplies three seeds with the same shape:
- * authors, books (two per author, titled from the random stream, with a link
- * that sets each author's favourite book) and profiles (one per author).
- */
+/** The behaviour every adapter must exhibit, run against each storage layer. */
 type AuthorShape = {
   readonly id: string;
   readonly name: string;
@@ -50,10 +45,7 @@ type Targets<Target> = {
   readonly profiles: Target;
 };
 
-/**
- * The three seeds the suite runs over, on whatever targets a harness has.
- * A harness whose adapter cannot name its targets passes names as well.
- */
+/** A harness whose adapter cannot name its targets passes names as well. */
 export function harnessSeeds<Target>(
   targets: Targets<Target>,
   names?: Targets<string>,

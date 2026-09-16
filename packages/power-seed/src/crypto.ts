@@ -1,8 +1,6 @@
 /**
- * RFC 4122 version 5 UUIDs (SHA-1, name based), implemented inline so the
- * package needs neither the `uuid` package nor a runtime-specific crypto API.
- * `crypto.subtle` is asynchronous and Node's `crypto` is Node only, and id
- * derivation has to be synchronous and portable.
+ * UUID v5 inline: `crypto.subtle` is asynchronous and Node's `crypto` is Node
+ * only, and id derivation has to be synchronous and portable.
  */
 
 const HEX = /^[0-9a-f]{32}$/i;
@@ -63,7 +61,6 @@ function rotateLeft(value: number, bits: number): number {
   return (value << bits) | (value >>> (32 - bits));
 }
 
-/** Plain SHA-1 over a byte array. Roughly 40 lines, and it never changes. */
 export function sha1(message: Uint8Array): Uint8Array {
   const bitLength = message.length * 8;
   const paddedLength = Math.ceil((message.length + 9) / 64) * 64;
@@ -156,10 +153,7 @@ function formatUuid(bytes: Uint8Array): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/**
- * A UUID that is a pure function of `name` within `namespace`, so the same
- * identity always yields the same id. Compatible with `uuid`'s `v5`.
- */
+/** Compatible with `uuid`'s `v5`. */
 export function uuidV5(name: string, namespace: string): string {
   const namespaceBytes = bytesOfUuid(namespace);
   const nameBytes = utf8(name);

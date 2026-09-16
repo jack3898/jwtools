@@ -9,10 +9,6 @@ export type Weighted<T> = {
   readonly weight: number;
 };
 
-/**
- * The draws a seed usually needs, on a stream the engine seeds once per seed.
- * Anything richer, names and addresses say, comes in through `extend`.
- */
 export type Random = {
   /** In `[min, max)`. Defaults to `[0, 1)`. */
   readonly float: (range?: Partial<Range>) => number;
@@ -32,10 +28,7 @@ export type Random = {
   readonly dateBetween: (from: Date, to: Date) => Date;
 };
 
-/**
- * mulberry32: a 32-bit generator that is small, fast and good enough for
- * fixture data. Determinism, not cryptographic strength, is the requirement.
- */
+/** mulberry32: determinism, not cryptographic strength, is the requirement. */
 export function createRandom(seed: number): Random {
   let state = seed >>> 0;
 
@@ -50,7 +43,6 @@ export function createRandom(seed: number): Random {
     return ((t ^ (t >>> 14)) >>> 0) / 0x1_0000_0000;
   }
 
-  /** An index below `count`: the one way a draw becomes a position. */
   function below(count: number): number {
     return Math.floor(next() * count);
   }

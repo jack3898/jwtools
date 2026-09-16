@@ -1,55 +1,35 @@
-/** What the engine stamps on every row beneath the seed's own columns. */
 export type StampContext = {
   readonly now: Date;
 };
 
 /**
- * Everything the engine needs from a storage layer. The engine never looks at
- * a target itself: it hands the target to these functions and to nothing else,
- * so a target can be a Drizzle table, a Kysely table name, a Zod schema, or
- * anything an adapter knows how to write to. Nor does it look inside a row
- * for its key: `key` is the one place that says what identifies a row.
+ * The engine hands a target to these and looks at nothing else, so a target
+ * can be anything an adapter knows how to write to.
  */
 export type Adapter<Target> = {
   /**
-   * A stable name for the target. It becomes the default seed name and part
-   * of every derived id, so it must not change between runs. Return
-   * `undefined` for targets that have no name; every seed on such a target
-   * must then set `name` itself.
+   * A stable name: the default seed name and part of every id. `undefined`
+   * means every seed on the target must set `name`.
    */
   readonly nameOf: (target: Target) => string | undefined;
   /**
-   * What identifies `row` in the target: the value under its primary key,
-   * or a tuple for a composite one. It is what a rerun deduplicates by and
-   * what `present` and `update` receive. Return `undefined` for a row that
-   * has none, such as one whose key the database assigns; such a row is
-   * inserted but cannot be updated.
+   * What identifies `row` in the target, or `undefined` for a row that has no
+   * key yet. A rerun deduplicates by it; `present` and `update` receive it.
    */
   readonly key: (target: Target, row: Record<string, unknown>) => unknown;
-  /**
-   * Columns written onto every row beneath the seed's own values. Drizzle
-   * drops keys a table lacks, so a Drizzle adapter can stamp timestamps
-   * freely. Most other drivers do not, so leave this out unless every target
-   * has the columns.
-   */
+  /** Columns beneath every row. Leave it out unless every target has them. */
   readonly stamp?:
     | ((context: StampContext) => Record<string, unknown>)
     | undefined;
   /**
-   * Write rows, ignoring any already there. That is what makes a rerun a
-   * no-op: a builder's ids derive from identity, so a row already there is
-   * the same row. Returns how many rows were actually written, or `undefined`
-   * when the driver cannot say.
+   * Write rows, ignoring any already there. Returns how many were written,
+   * or `undefined` when the driver cannot say.
    */
   readonly insert: (
     target: Target,
     rows: ReadonlyArray<Record<string, unknown>>,
   ) => Promise<number | undefined>;
-  /**
-   * How many rows under these keys exist in the target. Called only when
-   * `insert` reported fewer rows than it was offered, to tell a harmless
-   * repeat from a row a unique constraint rejected.
-   */
+  /** How many rows under these keys exist. Called when `insert` came up short. */
   readonly present?:
     | ((target: Target, keys: ReadonlyArray<unknown>) => Promise<number>)
     | undefined;
@@ -61,39 +41,24 @@ export type Adapter<Target> = {
   ) => Promise<void>;
 };
 
-/** Rows by key, by target. What `memory` writes into. */
 export type MemoryStore<Target> = Map<
   Target,
   Map<string, Record<string, unknown>>
 >;
 
 export type MemoryOptions<Target> = {
-  /**
-   * Where rows go. Pass your own to look at what was written; the adapter
-   * has no read API of its own, since rows come back through handles.
-   */
+  /** Pass your own to look at what was written; there is no read API. */
   readonly store?: MemoryStore<Target>;
-  /**
-   * Runs on every row before it is stored and returns what to store. Hand it
-   * a schema's `parse` to validate rows, or use it to apply defaults.
-   */
+  /** Runs on every row before it is stored. Hand it a schema's `parse`. */
   readonly parse?: (
     target: Target,
     row: Record<string, unknown>,
   ) => Record<string, unknown>;
-  /**
-   * What a row is stored under. Defaults to its `id`. A row with none is
-   * stored regardless, but like a row under a serial key it is appended
-   * again on a rerun.
-   */
+  /** What a row is stored under, `id` by default. A row with none is appended. */
   readonly key?: (target: Target, row: Record<string, unknown>) => unknown;
 };
 
-/**
- * Keeps rows in memory, keyed by target identity. The zero-dependency default:
- * generate object graphs without a database, or test seeds without one. A
- * string target names itself; any other kind needs `name` on the seed.
- */
+/** A string target names itself; any other kind needs `name` on the seed. */
 export function memory<Target = unknown>(
   options: MemoryOptions<Target> = {},
 ): Adapter<Target> {
@@ -110,7 +75,6 @@ export function memory<Target = unknown>(
     return table;
   }
 
-  // The engine hands over private copies, so there is nothing to defend.
   const prepare =
     options.parse ?? ((_target: Target, row: Record<string, unknown>) => row);
 

@@ -130,8 +130,7 @@ describe("ids", () => {
       build: ({ id }) => [{ id: id("1"), n: 9 }],
     });
 
-    // Same target and key, different seed name: the key is scoped by name,
-    // so the ids differ. Only the target half is shared.
+    // The key is scoped by seed name, so only the target half is shared.
     expect(plain.first().id).not.toBe(renamed.first().id);
     expect(renamed.first().id).toBe(
       (await plant(adapter, [renamedAgain], { dryRun: true }))
@@ -217,7 +216,6 @@ describe("handles", () => {
       true,
     ]);
     expect(teamHandle.names()).toEqual(["Crimson", "Blue"]);
-    // What the handle says is what was stored.
     expect(store.get("teams")?.get(teamHandle.first().id)?.name).toBe(
       "Crimson",
     );
@@ -334,7 +332,6 @@ describe("streams", () => {
 
     expect(value(after)).toBe(value(alone));
     expect(value(before)).toBe(value(alone));
-    // A seed that draws after pulling in a noisy dependency is unaffected too.
     const viaNoise = (await plant(adapter, [dependent], options)).handle(
       dependent,
     );

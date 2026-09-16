@@ -13,10 +13,8 @@ import type {
 
 export const FIXED_SEED = 20_260_703;
 
-/** Every generated date derives from this, so a run never reads the clock. */
 export const FIXED_NOW = new Date(Date.UTC(2026, 0, 1));
 
-/** Ids are a pure function of identity, so a row keeps its id as data grows. */
 export const DEFAULT_NAMESPACE = "6f9b2d5e-1c3a-4b7e-8f21-2a9c4d6e8b0f";
 
 export type SeedReport = {
@@ -27,10 +25,7 @@ export type SeedReport = {
 };
 
 export type ExtendContext = {
-  /**
-   * Derived for this seed from the run seed and the seed's identity, so a
-   * stream seeded from it is independent of every other seed's.
-   */
+  /** Derived for this seed, so a stream seeded from it is its own. */
   readonly seed: number;
   readonly now: Date;
 };
@@ -47,25 +42,15 @@ type BaseRunOptions<X extends object> = {
   readonly now?: Date | undefined;
   readonly namespace?: string | undefined;
   readonly onSeed?: ((report: SeedReport) => void) | undefined;
-  /**
-   * Compute handles without writing rows. Sound because building is pure:
-   * ids and rows are functions of seed identity, never of the database, so a
-   * dry run's handles name exactly the rows a real run inserts.
-   */
+  /** Compute handles without writing. Sound because building never reads. */
   readonly dryRun?: boolean | undefined;
   /** Replaces uuid v5 as the id derivation. Must be pure. */
   readonly id?: ((context: IdContext) => string) | undefined;
-  /**
-   * Built once per seed and spread into its toolkit. Where a faker instance,
-   * seeded from `context.seed`, comes in.
-   */
+  /** Built once per seed and spread into its toolkit. */
   readonly extend?: ((context: ExtendContext) => X) | undefined;
 };
 
-/**
- * The trailing argument of `seed`. Optional until a seed needs extras, at
- * which point leaving it off would skip `extend` unnoticed.
- */
+/** Optional until a seed needs extras, so a missing `extend` is noticed. */
 export type RunArgs<X extends object> = object extends X
   ? [options?: BaseRunOptions<X>]
   : [
@@ -76,7 +61,6 @@ export type RunArgs<X extends object> = object extends X
 
 export type RunOptions<X extends object = object> = NonNullable<RunArgs<X>[0]>;
 
-/** `week_number_systems` -> `weekNumberSystems`, so config keys read naturally. */
 function camelCase(value: string): string {
   return value.replaceAll(/_(\w)/g, (_match, letter: string) =>
     letter.toUpperCase(),
@@ -98,11 +82,7 @@ function createRun<Target, X extends object>(
   /** Keys written per target, kept on a dry run too so it fails the same. */
   const written = new Map<unknown, Set<unknown>>();
 
-  // The engine carries targets as `unknown` so seeds on different concrete
-  // targets can depend on each other. The adapter is the one place that
-  // knows what they really are.
   const targetOf = (meta: SeedMeta): Target => meta.target as Target;
-  // Handles hold plain objects; the adapter reads them as records.
   const keyOf = (meta: SeedMeta, row: object): unknown =>
     adapter.key(targetOf(meta), row as Record<string, unknown>);
 
@@ -133,8 +113,6 @@ function createRun<Target, X extends object>(
   const run: Run<X> = {
     nameOf,
 
-    // Each seed draws from its own stream, keyed the way ids are, so its
-    // values survive reordering, new dependencies and other entry points.
     toolkit: (meta): Toolkit & X => {
       const name = nameOf(meta);
       const target = targetNameOf(meta);
@@ -146,8 +124,7 @@ function createRun<Target, X extends object>(
         {
           now,
           random: createRandom(own),
-          // Keyed under the seed's name, so two seeds on one target never
-          // mint the same id for the same key.
+          // Scoped by seed name, so two seeds on one target never collide.
           id: (key: string) =>
             derive({ target, key: `${name}#${key}`, namespace: within }),
         },
@@ -157,8 +134,6 @@ function createRun<Target, X extends object>(
 
     stamp: (context) => adapter.stamp?.(context) ?? {},
 
-    // Ignoring conflicts is what makes a run repeatable: a builder's ids
-    // derive from identity, so a row already there is the same row.
     insert: async (meta, rows) => {
       const name = nameOf(meta);
       const targetName = targetNameOf(meta);
@@ -170,9 +145,8 @@ function createRun<Target, X extends object>(
       for (const row of rows) {
         const key = keyOf(meta, row);
 
-        // Same key, same row, is what makes a rerun safe. Within one run it
-        // means two rows would land as one, and a handle would vouch for a
-        // row that never did.
+        // Two rows under one key would land as one, and a handle would
+        // vouch for the row that never did.
         if (key != null && keys.has(key)) {
           throw new Error(
             `Seed "${name}" offered ${targetName} a row under key "${String(key)}", which this run already wrote. Two rows on one target need different keys.`,
@@ -187,17 +161,14 @@ function createRun<Target, X extends object>(
         return;
       }
 
-      // Private copies, so the adapter can keep them without sharing the
-      // objects the handles hold.
+      // Private copies, so the adapter may keep them.
       const count = await adapter.insert(
         target,
         rows.map((row) => ({ ...row })),
       );
 
-      // A row can be skipped because it is already there, the same seed run
-      // twice, or because a natural key rejected it, which the handle would
-      // otherwise still vouch for. Only the second is a problem, so ask
-      // rather than trust the count.
+      // A short count is fine when the rows were already there and not when
+      // a unique constraint rejected them, so ask rather than trust it.
       if (count !== undefined && count < rows.length && adapter.present) {
         const offered = rows.map((row) => keyOf(meta, row));
         const missing = rows.length - (await adapter.present(target, offered));
@@ -212,8 +183,6 @@ function createRun<Target, X extends object>(
       options.onSeed?.({ name, target: targetName, rows: rows.length });
     },
 
-    // The row is the reference: the adapter finds it by its key, and the
-    // handle's object is changed in place.
     update: async (row, values) => {
       const meta = owners.get(row);
 
@@ -242,8 +211,7 @@ function createRun<Target, X extends object>(
       links.push(link);
     },
 
-    // Drained in waves: a link may reach for a seed nothing had needed yet,
-    // and that seed may bring a link of its own.
+    // In waves: a link may pull in a seed that brings a link of its own.
     runLinks: async () => {
       while (links.length > 0) {
         for (const link of links.splice(0)) {
@@ -283,9 +251,8 @@ function defaultId({ target, key, namespace }: IdContext): string {
 }
 
 /**
- * The first four bytes of a SHA-1 over the same inputs ids use. Hashed
- * directly rather than through `uuidV5`, since a custom `id` may pair with
- * a namespace that is not a uuid.
+ * Hashed directly rather than through `uuidV5`, since a custom `id` may pair
+ * with a namespace that is not a uuid.
  */
 function streamSeed(seed: number, target: string, namespace: string): number {
   const digest = sha1(utf8(`${seed}:${target}:${namespace}`));
@@ -293,12 +260,7 @@ function streamSeed(seed: number, target: string, namespace: string): number {
   return new DataView(digest.buffer, digest.byteOffset).getUint32(0);
 }
 
-/**
- * The engine carries config as an untyped record; `ConfigOf` types it for the
- * caller and `build` reads it back as the defaults' shape. The key check is
- * what makes that true. Without it a misspelt key would read as a silent
- * request for the default.
- */
+/** Without the key check a misspelt key would silently read as the default. */
 function resolveConfig(
   name: string,
   defaults: SeedConfig | undefined,
@@ -320,11 +282,7 @@ function isPlainObject(value: unknown): value is SeedConfig {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/**
- * Nested objects merge, so `{ managers: { min: 2 } }` keeps the default `max`
- * instead of dropping it. Arrays replace: a partial weighting table means
- * nothing.
- */
+/** Nested objects merge. Arrays replace: a partial weighting means nothing. */
 function deepMerge(defaults: SeedConfig, overrides: SeedConfig): SeedConfig {
   const merged: SeedConfig = { ...defaults };
 
@@ -340,7 +298,6 @@ function deepMerge(defaults: SeedConfig, overrides: SeedConfig): SeedConfig {
   return merged;
 }
 
-/** What may go in the ground: a seed as is, or one with overrides. */
 type Plantable<Target, X extends object> =
   | Seed<Target, object, object, X>
   | SeedEntry<Seed<Target, object, object, X>>;
@@ -348,15 +305,13 @@ type Plantable<Target, X extends object> =
 /** The seed behind a planting, whether it went in bare or with overrides. */
 export type Planted<P> = P extends SeedEntry<infer S> ? S : P;
 
-/** What `plant` grows: a handle for any seed that was planted. */
 export type Bed<P extends ReadonlyArray<unknown>> = {
   readonly handle: <T extends Planted<P[number]>>(seeder: T) => HandleOf<T>;
 };
 
 /**
- * Plant every seed, and everything each asks for, in one bed. Seeds share
- * what is beneath them, so a seed two of them depend on is built once. A
- * seed reached only through another is configured by planting it too.
+ * Seeds share what is beneath them, so a seed two of them depend on is built
+ * once. A seed reached only through another is configured by planting it too.
  */
 export async function plant<
   Target,
@@ -374,7 +329,6 @@ export async function plant<
   const list: ReadonlyArray<Plantable<Target, X>> = plantings;
   const seeders: Array<Seed<Target, object, object, X>> = [];
 
-  // Every planting mistake is caught here, before anything is inserted.
   for (const planting of list) {
     const { seeder, config } =
       "seeder" in planting ? planting : { seeder: planting, config: undefined };
