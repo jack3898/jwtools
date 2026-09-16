@@ -29,4 +29,4 @@ const players = seeder({
 
 const bed = await plant(memory(), [teams, players.override({ perTeam: 2 })]);
 
-console.log(bed.handle(teams).byName("Red"));
+console.log(bed.handle(teams).all);

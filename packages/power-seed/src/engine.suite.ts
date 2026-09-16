@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Adapter } from "./adapter";
-import { plant, type SeedReport } from "./plant";
+import { plant } from "./plant";
+import type { SeedReport } from "./run/options";
 import { type Seed, seeder } from "./seeder";
 
 /** The behaviour every adapter must exhibit, run against each storage layer. */
