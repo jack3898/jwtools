@@ -40,18 +40,23 @@ function seeder<
 function drizzleAdapter(db: PgDatabase<PgQueryResultHKT>): Adapter<PgTable> {
   const BATCH = 1000;
 
-  function idColumn(table: PgTable) {
-    const column = getTableColumns(table).id;
+  /** The table's primary key, as the row's property and the column. */
+  function primaryKey(table: PgTable) {
+    const found = Object.entries(getTableColumns(table)).find(
+      ([, column]) => column.primary,
+    );
 
-    if (!column) {
-      throw new Error(`${getTableName(table)} has no id column`);
+    if (!found) {
+      throw new Error(`${getTableName(table)} has no primary key column`);
     }
 
-    return column;
+    return found;
   }
 
   return {
     nameOf: (table) => getTableName(table),
+
+    key: (table, row) => row[primaryKey(table)[0]],
 
     // Drizzle drops keys a table lacks, so tables without timestamps are fine.
     stamp: ({ now }) => ({ createdAt: now, updatedAt: now }),
@@ -64,7 +69,7 @@ function drizzleAdapter(db: PgDatabase<PgQueryResultHKT>): Adapter<PgTable> {
           .insert(table)
           .values([...rows.slice(start, start + BATCH)])
           .onConflictDoNothing()
-          .returning({ id: idColumn(table) });
+          .returning({ key: primaryKey(table)[1] });
 
         written += inserted.length;
       }
@@ -72,20 +77,21 @@ function drizzleAdapter(db: PgDatabase<PgQueryResultHKT>): Adapter<PgTable> {
       return written;
     },
 
-    present: async (table, ids) => {
+    present: async (table, keys) => {
+      const column = primaryKey(table)[1];
       const found = await db
-        .select({ id: idColumn(table) })
+        .select({ key: column })
         .from(table)
-        .where(inArray(idColumn(table), [...ids]));
+        .where(inArray(column, [...keys]));
 
-      return found.map((row) => String(row.id));
+      return found.length;
     },
 
-    update: async (table, id, values) => {
+    update: async (table, key, values) => {
       await db
         .update(table)
         .set(values)
-        .where(eq(idColumn(table), id));
+        .where(eq(primaryKey(table)[1], key));
     },
   };
 }
@@ -204,7 +210,10 @@ describe("drizzle specifics", () => {
     const duplicates = seeder({
       target: authorsTable,
       name: "duplicates",
-      build: () => [{ name: "Twin" }, { name: "Twin" }],
+      build: ({ id }) => [
+        { id: id("1"), name: "Twin" },
+        { id: id("2"), name: "Twin" },
+      ],
     });
 
     await expect(plant(adapter, [duplicates])).rejects.toThrow(

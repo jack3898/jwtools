@@ -1,6 +1,5 @@
-/** What the engine stamps on every row before the seed's own columns. */
+/** What the engine stamps on every row beneath the seed's own columns. */
 export type StampContext = {
-  readonly id: string;
   readonly now: Date;
 };
 
@@ -8,7 +7,8 @@ export type StampContext = {
  * Everything the engine needs from a storage layer. The engine never looks at
  * a target itself: it hands the target to these functions and to nothing else,
  * so a target can be a Drizzle table, a Kysely table name, a Zod schema, or
- * anything an adapter knows how to write to.
+ * anything an adapter knows how to write to. Nor does it look inside a row
+ * for its key: `key` is the one place that says what identifies a row.
  */
 export type Adapter<Target> = {
   /**
@@ -19,6 +19,14 @@ export type Adapter<Target> = {
    */
   readonly nameOf: (target: Target) => string | undefined;
   /**
+   * What identifies `row` in the target: the value under its primary key,
+   * or a tuple for a composite one. It is what a rerun deduplicates by and
+   * what `present` and `update` receive. Return `undefined` for a row that
+   * has none, such as one whose key the database assigns; such a row is
+   * inserted but cannot be updated.
+   */
+  readonly key: (target: Target, row: Record<string, unknown>) => unknown;
+  /**
    * Columns written onto every row beneath the seed's own values. Drizzle
    * drops keys a table lacks, so a Drizzle adapter can stamp timestamps
    * freely. Most other drivers do not, so leave this out unless every target
@@ -28,35 +36,32 @@ export type Adapter<Target> = {
     | ((context: StampContext) => Record<string, unknown>)
     | undefined;
   /**
-   * Write rows, ignoring any whose id is already present. That is what makes a
-   * rerun a no-op: ids derive from identity, so a row already there is the
-   * same row. Returns how many rows were actually written, or `undefined` when
-   * the driver cannot say.
+   * Write rows, ignoring any already there. That is what makes a rerun a
+   * no-op: a builder's ids derive from identity, so a row already there is
+   * the same row. Returns how many rows were actually written, or `undefined`
+   * when the driver cannot say.
    */
   readonly insert: (
     target: Target,
     rows: ReadonlyArray<Record<string, unknown>>,
   ) => Promise<number | undefined>;
   /**
-   * Which of `ids` exist in the target. Called only when `insert` reported
-   * fewer rows than it was offered, to tell a harmless repeat from a row a
-   * unique constraint rejected.
+   * How many rows under these keys exist in the target. Called only when
+   * `insert` reported fewer rows than it was offered, to tell a harmless
+   * repeat from a row a unique constraint rejected.
    */
   readonly present?:
-    | ((
-        target: Target,
-        ids: ReadonlyArray<string>,
-      ) => Promise<ReadonlyArray<string>>)
+    | ((target: Target, keys: ReadonlyArray<unknown>) => Promise<number>)
     | undefined;
-  /** Set columns on the row with this id. */
+  /** Set columns on the row under this key. */
   readonly update: (
     target: Target,
-    id: string,
+    key: unknown,
     values: Record<string, unknown>,
   ) => Promise<void>;
 };
 
-/** Rows by id, by target. What `memory` writes into. */
+/** Rows by key, by target. What `memory` writes into. */
 export type MemoryStore<Target> = Map<
   Target,
   Map<string, Record<string, unknown>>
@@ -76,6 +81,12 @@ export type MemoryOptions<Target> = {
     target: Target,
     row: Record<string, unknown>,
   ) => Record<string, unknown>;
+  /**
+   * What a row is stored under. Defaults to its `id`. A row with none is
+   * stored regardless, but like a row under a serial key it is appended
+   * again on a rerun.
+   */
+  readonly key?: (target: Target, row: Record<string, unknown>) => unknown;
 };
 
 /**
@@ -87,6 +98,8 @@ export function memory<Target = unknown>(
   options: MemoryOptions<Target> = {},
 ): Adapter<Target> {
   const store: MemoryStore<Target> = options.store ?? new Map();
+  const key =
+    options.key ?? ((_target: Target, row: Record<string, unknown>) => row.id);
 
   function tableFor(target: Target): Map<string, Record<string, unknown>> {
     const table =
@@ -104,16 +117,19 @@ export function memory<Target = unknown>(
   return {
     nameOf: (target) => (typeof target === "string" ? target : undefined),
 
+    key,
+
     // No `present`: nothing here can reject a row, so the count is the truth.
     insert: (target, rows) => {
       const table = tableFor(target);
       let written = 0;
 
       for (const row of rows) {
-        const id = String(row.id);
+        const found = key(target, row);
+        const under = found == null ? `#${table.size}` : String(found);
 
-        if (!table.has(id)) {
-          table.set(id, prepare(target, row));
+        if (!table.has(under)) {
+          table.set(under, prepare(target, row));
           written++;
         }
       }
@@ -121,15 +137,16 @@ export function memory<Target = unknown>(
       return Promise.resolve(written);
     },
 
-    update: (target, id, values) => {
+    update: (target, found, values) => {
       const table = tableFor(target);
-      const existing = table.get(id);
+      const under = String(found);
+      const existing = table.get(under);
 
       if (!existing) {
-        throw new Error(`No row "${id}" to update`);
+        throw new Error(`No row "${under}" to update`);
       }
 
-      table.set(id, prepare(target, { ...existing, ...values }));
+      table.set(under, prepare(target, { ...existing, ...values }));
 
       return Promise.resolve();
     },

@@ -12,7 +12,6 @@ import {
   type HandleOf,
   memory,
   plant,
-  type Row,
   type SeedConfig,
   type SeedDefinition,
   seeder,
@@ -34,7 +33,7 @@ const people = seeder({
       age: random.int(config.ages),
     })),
   accessors: ({ rows }) => ({
-    names: () => rows.map((person) => person.row.name),
+    names: () => rows.map((person) => person.name),
   }),
 });
 
@@ -42,8 +41,8 @@ describe("seeder", () => {
   it("infers the row shape from what build returns", () => {
     expectTypeOf<HandleOf<typeof people>>().toMatchTypeOf<{
       names: () => Array<string>;
-      all: ReadonlyArray<Row<{ name: string; age: number }>>;
-      first: () => Row<{ name: string; age: number }>;
+      all: ReadonlyArray<{ name: string; age: number }>;
+      first: () => { name: string; age: number };
     }>();
   });
 
@@ -61,9 +60,9 @@ describe("seeder", () => {
         const owners = await get(people);
 
         expectTypeOf(owners.names()).toEqualTypeOf<Array<string>>();
-        expectTypeOf(owners.first().row.age).toEqualTypeOf<number>();
+        expectTypeOf(owners.first().age).toEqualTypeOf<number>();
 
-        return [{ ownerId: owners.first().id }];
+        return [{ owner: owners.first().name }];
       },
     });
   });
@@ -146,9 +145,27 @@ describe("seed", () => {
     const result = await plant(adapter, [people]);
 
     expectTypeOf(result.handle(people).names()).toEqualTypeOf<Array<string>>();
-    expectTypeOf(result.handle(people).first().row.age).toEqualTypeOf<number>();
+    expectTypeOf(result.handle(people).first().age).toEqualTypeOf<number>();
     // @ts-expect-error only a planted seed has a handle
     result.handle(words);
+  });
+
+  it("types a link's update from the row it is handed", () => {
+    seeder({
+      target: "pets",
+      build: () => [{ name: "Rex", ownerName: "" }],
+      link: async ({ rows, update, get }) => {
+        const owners = await get(people);
+        const [pet] = rows;
+
+        await update(owners.first(), { age: 1 });
+
+        if (pet) {
+          // @ts-expect-error the wrong type for a column
+          await update(pet, { name: 1 });
+        }
+      },
+    });
   });
 
   it("types overrides from the seed", async () => {

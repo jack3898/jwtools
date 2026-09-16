@@ -2,7 +2,7 @@
 
 Dependency-aware data seeding with zero dependencies. Bring your own schema and your own driver.
 
-Seeds ask for each other, so the dependency graph is whatever your builders call. Every id is a pure function of identity, so a rerun is a no-op and a dry run computes the exact rows a real run inserts. Nothing in the package knows what a table is: a Drizzle table, a Kysely table name, a Zod schema, or a plain string all work, because the engine only ever hands the target to an adapter you supply.
+Seeds ask for each other, so the dependency graph is whatever your builders call. Ids are a pure function of identity, so a rerun is a no-op and a dry run computes the exact rows a real run inserts. Nothing in the package knows what a table is, or which column identifies a row: a Drizzle table, a Kysely table name, a Zod schema, or a plain string all work, because the engine only ever hands the target to an adapter you supply.
 
 ## Installation
 
@@ -22,20 +22,22 @@ import { seeder, memory, plant } from "@jack3898/power-seed";
 const teams = seeder({
   target: "teams",
   defaults: { names: ["Red", "Blue"] },
-  build: ({ config }) => config.names.map((name) => ({ name })),
+  build: ({ config, id }) =>
+    config.names.map((name) => ({ id: id(name), name })),
   accessors: ({ rows }) => ({
-    byName: (name: string) => rows.find((team) => team.row.name === name),
+    byName: (name: string) => rows.find((team) => team.name === name),
   }),
 });
 
 const players = seeder({
   target: "players",
   defaults: { perTeam: 3 },
-  build: async ({ config, random, get }) => {
+  build: async ({ config, random, id, get }) => {
     const { all } = await get(teams); // this IS the dependency
 
     return all.flatMap((team) =>
       Array.from({ length: config.perTeam }, (_, index) => ({
+        id: id(`${team.name}#${index}`),
         teamId: team.id,
         number: index + 1,
         rating: random.int({ min: 1, max: 99 }),
@@ -49,13 +51,13 @@ const bed = await plant(adapter, [
   players.override({ perTeam: 2 }),
 ]);
 
-bed.handle(players).all; // every player row, with its id
+bed.handle(players).all; // every player row, as built
 ```
 
 Three things happened there:
 
 - **`players` pulled `teams` in** by calling `get(teams)`. There is no dependency list to keep in sync with the code. To get the `teams` handle back as well, plant it too.
-- **Every row got a stable id** derived from its seed name and index. Run it again and the same ids are offered, and the adapter keeps the rows already there.
+- **Every row got a stable id** because its builder asked `id` for one. It derives from the seed's name and the key, so run it again and the same ids are offered, and the adapter keeps the rows already there. The engine never reads the id back: which column identifies a row, and whether there is one, is between your builder and your adapter.
 - **`random.int` drew from a stream of this seed's own**, derived from the run seed and the seed's identity. The same seed gives the same ratings, every time, on every machine, whatever else is in the run.
 
 ## Bringing your schema
@@ -91,20 +93,23 @@ export const adapter = memory<z.ZodObject>({
 
 ```ts
 const authorSchema = z.object({
-  id: z.string().optional(), // the engine supplies one
+  id: z.string(),
   name: z.string(),
 });
 
 const authors = seeder({
   target: authorSchema,
   name: "authors", // a schema has no name, so the seed must
-  build: () => [{ name: "Ada" }, { name: "Grace" }],
+  build: ({ id }) => [
+    { id: id("ada"), name: "Ada" },
+    { id: id("grace"), name: "Grace" },
+  ],
 });
 ```
 
 ### Drizzle
 
-Rows are typed as the table's insert model, and the adapter uses Drizzle's conflict handling to make reruns idempotent:
+Rows are typed as the table's insert model, and the adapter reads each table's primary key from its columns, so it works for any key column, uuid or serial, whatever it is called:
 
 ```ts
 import {
@@ -140,18 +145,23 @@ export function drizzleAdapter(
 ): Adapter<PgTable> {
   const BATCH = 1000;
 
-  function idColumn(table: PgTable) {
-    const column = getTableColumns(table)["id"];
+  /** The table's primary key, as the row's property and the column. */
+  function primaryKey(table: PgTable) {
+    const found = Object.entries(getTableColumns(table)).find(
+      ([, column]) => column.primary,
+    );
 
-    if (!column) {
-      throw new Error(`${getTableName(table)} has no id column`);
+    if (!found) {
+      throw new Error(`${getTableName(table)} has no primary key column`);
     }
 
-    return column;
+    return found;
   }
 
   return {
     nameOf: (table) => getTableName(table),
+
+    key: (table, row) => row[primaryKey(table)[0]],
 
     // Drizzle drops keys a table lacks, so tables without timestamps are fine.
     stamp: ({ now }) => ({ createdAt: now, updatedAt: now }),
@@ -164,7 +174,7 @@ export function drizzleAdapter(
           .insert(table)
           .values([...rows.slice(start, start + BATCH)])
           .onConflictDoNothing()
-          .returning({ id: idColumn(table) });
+          .returning({ key: primaryKey(table)[1] });
 
         written += inserted.length;
       }
@@ -172,20 +182,21 @@ export function drizzleAdapter(
       return written;
     },
 
-    present: async (table, ids) => {
+    present: async (table, keys) => {
+      const column = primaryKey(table)[1];
       const found = await db
-        .select({ id: idColumn(table) })
+        .select({ key: column })
         .from(table)
-        .where(inArray(idColumn(table), [...ids]));
+        .where(inArray(column, [...keys]));
 
-      return found.map((row) => String(row.id));
+      return found.length;
     },
 
-    update: async (table, id, values) => {
+    update: async (table, key, values) => {
       await db
         .update(table)
         .set(values)
-        .where(eq(idColumn(table), id));
+        .where(eq(primaryKey(table)[1], key));
     },
   };
 }
@@ -208,7 +219,7 @@ export function seeder<
 }
 ```
 
-The adapter is `db.insertInto(table).values(rows).onConflict((oc) => oc.doNothing())` and friends. Anything that can name a target, insert rows while ignoring existing ids, and update a row by id can be an adapter.
+The adapter is `db.insertInto(table).values(rows).onConflict((oc) => oc.doNothing())` and friends. Anything that can name a target, say what identifies a row in it, insert rows while ignoring ones already there, and update a row by that key can be an adapter. Mongo fits too: pass `id` in the run options to derive a 24-character hex string, key rows by `_id`, and have the adapter wrap it in an `ObjectId` on the way in.
 
 ## The adapter contract
 
@@ -218,33 +229,39 @@ type Adapter<Target> = {
   // Return undefined when the target has none; those seeds must set `name`.
   nameOf: (target: Target) => string | undefined;
 
+  // What identifies a row in the target: the value under its primary key, or
+  // a tuple for a composite one. Undefined for a row that has none yet, such
+  // as one whose key the database assigns.
+  key: (target: Target, row: Record<string, unknown>) => unknown;
+
   // Optional columns written beneath every row. Leave it out unless every
   // target has the columns: most drivers do not drop unknown keys.
-  stamp?: (context: { id: string; now: Date }) => Record<string, unknown>;
+  stamp?: (context: { now: Date }) => Record<string, unknown>;
 
-  // Write rows, skipping any whose id already exists. Return how many were
-  // written, or undefined if the driver cannot say.
+  // Write rows, skipping any already there. Return how many were written,
+  // or undefined if the driver cannot say.
   insert: (
     target: Target,
     rows: ReadonlyArray<Record<string, unknown>>,
   ) => Promise<number | undefined>;
 
-  // Which of these ids exist. Only called when insert wrote fewer rows than
-  // offered, to tell a harmless rerun from a row a unique constraint rejected.
-  present?: (
-    target: Target,
-    ids: ReadonlyArray<string>,
-  ) => Promise<ReadonlyArray<string>>;
+  // How many rows under these keys exist. Only called when insert wrote
+  // fewer rows than offered, to tell a harmless rerun from a row a unique
+  // constraint rejected.
+  present?: (target: Target, keys: ReadonlyArray<unknown>) => Promise<number>;
 
+  // Set columns on the row under this key.
   update: (
     target: Target,
-    id: string,
+    key: unknown,
     values: Record<string, unknown>,
   ) => Promise<void>;
 };
 ```
 
-`memory()` ships in the box. It keeps rows in a `Map` keyed by target identity, names string targets after themselves, and takes an optional `parse` hook. Use it to generate object graphs with no database at all, or to unit test seeds without one. It has no read API: rows come back through handles. A test that wants to look at storage passes its own `store` map in and reads that.
+`key` is the one place that says which column identifies a row, so a table keyed by `id`, by `_id`, by a serial integer or by two columns together is the adapter's business alone. The engine uses what it returns for three things: it refuses a run that offers one target the same key twice, since the adapter would keep the first and the second's handle would name a row that never landed; it hands keys to `present` and `update`; and it refuses to update a row whose key is `undefined`, since nothing could find it.
+
+`memory()` ships in the box. It keeps rows in a `Map` keyed by target identity, names string targets after themselves, and takes an optional `parse` hook. Rows are stored under their `id`, or under whatever a `key` option returns; a row with neither is stored anyway, but like a row under a serial key it is appended again on a rerun. Use it to generate object graphs with no database at all, or to unit test seeds without one. It has no read API: rows come back through handles. A test that wants to look at storage passes its own `store` map in and reads that.
 
 ## Faker and other extras
 
@@ -294,7 +311,7 @@ A run is reproducible when every value derives from the run's inputs. The rules:
 - **Draw from `random`, or from something you seeded in `extend`.** Never from `Math.random`.
 - **Derive dates from `now`.** Never from `new Date()`.
 - **Draw in a fixed order within a seed.** Random draws inside a `Promise.all` resolve in scheduler order. Get what you need, then draw. Other seeds cannot interfere: each has its own stream, so a seed's values survive reordering, a new dependency, and a different entry point.
-- **Ids never depend on the random stream.** They come from the seed name and row index, so changing the seed changes values but not ids, and growing a list keeps the ids of the rows that were already there.
+- **Ids never depend on the random stream.** `id(key)` derives from the seed name and the key, so changing the seed changes values but not ids, and growing a list keeps the ids of the rows that were already there. Key rows by something that stays put as data grows: a name, or an index into a list that only ever appends.
 
 ```ts
 await plant(
@@ -324,20 +341,20 @@ Nested objects merge, so `{ ages: { max: 40 } }` keeps the default `min`. Arrays
 
 ## Handles and accessors
 
-Every seed resolves to a handle: the rows it wrote, a `first()` that throws rather than hand back an undefined that lands as a null foreign key, and whatever `accessors` defines on top. Handles are live: what a link sets through `update` or `updateIn` shows in `all`, `first()` and the accessors.
+Every seed resolves to a handle: the rows it wrote, exactly as the builder returned them, a `first()` that throws rather than hand back an undefined that lands as a null foreign key, and whatever `accessors` defines on top. Handles are live: what a link sets through `update` shows in `all`, `first()` and the accessors.
 
 ```ts
 const users = seeder({
   target: usersTable,
   build: /* ... */,
   accessors: ({ rows, random }) => ({
-    forSite: (siteId: string) => rows.filter((user) => user.row.siteId === siteId),
+    forSite: (siteId: string) => rows.filter((user) => user.siteId === siteId),
     pickRandom: () => random.pick(rows),
   }),
 });
 ```
 
-Accessors are what dependents use to build foreign keys: `(await get(users)).forSite(site.id)`.
+Accessors are what dependents use to build foreign keys: `(await get(users)).forSite(site.id)`. The engine knows nothing about foreign keys. A builder reads whichever column it needs off a row and writes it into whichever column points at it, so the relationships live where the schema does, in your code. The row objects a handle holds are the engine's references, and a link's `update` changes them in place, so do not mutate them yourself.
 
 ## Links
 
@@ -347,21 +364,21 @@ Two tables that point at each other cannot both be satisfied at insert time. A `
 const books = seeder({
   target: booksTable,
   build: async ({ get }) => /* one row per author */,
-  link: async ({ get, rows, updateIn }) => {
+  link: async ({ get, rows, update }) => {
     const { all } = await get(authors);
 
     for (const author of all) {
-      const first = rows.find((book) => book.row.authorId === author.id);
+      const first = rows.find((book) => book.authorId === author.id);
 
       if (first) {
-        await updateIn(authors, author.id, { favouriteBookId: first.id });
+        await update(author, { favouriteBookId: first.id });
       }
     }
   },
 });
 ```
 
-`update` writes to this seed's own rows and `updateIn` to another seed's. Write a reciprocal pair from one place: writing only the side you own leaves the other table disagreeing, and nothing in the database says otherwise. Links drain in waves, so a link may pull in a seed nothing had needed yet, and that seed may bring a link of its own.
+`update` takes a row from any handle in the run, this seed's own or another's, and is typed from it. Write a reciprocal pair from one place: writing only the side you own leaves the other table disagreeing, and nothing in the database says otherwise. Links drain in waves, so a link may pull in a seed nothing had needed yet, and that seed may bring a link of its own.
 
 ## Dry runs
 
@@ -370,7 +387,7 @@ const foundation = [tenants, sites, roles, users];
 const bed = await plant(adapter, foundation, { dryRun: true });
 ```
 
-Nothing is written, but the handles name exactly the rows a real run inserts. A test suite can take handles at module level for free and do the only actual seeding in `beforeEach`.
+Nothing is written, but the handles name exactly the rows a real run inserts, as long as the builders put ids from the toolkit on their rows. A row whose key the database assigns has no key on a dry run, and neither does anything built from it. A test suite can take handles at module level for free and do the only actual seeding in `beforeEach`.
 
 ## Reports
 
@@ -389,7 +406,7 @@ Fires for every seed the run wrote, deepest first. `rows` counts rows offered, n
 
 ## Namespaces and ids
 
-Ids are UUID v5: a hash of the target name, the seed name and the row index, inside a namespace. Two seeds that write the same target from different worlds, a dev profile and an integration fixture say, must use different namespaces, or they mint identical ids for unrelated rows and the run refuses the second:
+`id(key)` is UUID v5: a hash of the target name, the seed name and the key, inside a namespace. A builder puts it on the row under whatever column the target keys by, or leaves it off for a table whose key the database assigns, at the cost of reruns appending. Two seeds on one target need different names, or they mint the same ids and the run refuses the second. Two seeds that write the same target from different worlds, a dev profile and an integration fixture say, must use different namespaces, or they mint identical ids for unrelated rows:
 
 ```ts
 export const INTEGRATION = "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14";
@@ -400,7 +417,7 @@ const tenants = seeder({
 });
 ```
 
-A namespace can also be set for a whole run through the `namespace` option. A row may bring its own `id`, and `toolkit.id(key)` derives extra ids for other columns. To change the format entirely, pass `id` in the run options and return whatever your primary keys look like.
+A namespace can also be set for a whole run through the `namespace` option. `id(key)` derives as many ids as a row needs, so a unique email or slug can be stable too. To change the format entirely, pass `id` in the run options and return whatever your primary keys look like.
 
 The implementation ships its own SHA-1, forty lines that never change, so no crypto API and no `uuid` package are needed and the same identity yields the same id on every runtime. Ids match what the `uuid` package's `v5` produces.
 

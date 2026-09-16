@@ -5,10 +5,11 @@ export const publishers = seeder({
   target: publisherSchema,
   name: "publishers",
   defaults: { names: ["Penguin"] },
-  build: ({ config }) => config.names.map((name) => ({ name })),
+  build: ({ config, id }) =>
+    config.names.map((name) => ({ id: id(name), name })),
   accessors: ({ rows }) => ({
     byName: (name: string) => {
-      const found = rows.find((publisher) => publisher.row.name === name);
+      const found = rows.find((publisher) => publisher.name === name);
 
       if (!found) {
         throw new Error(`No publisher named "${name}"`);

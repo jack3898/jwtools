@@ -10,22 +10,21 @@ export type SeedConfig = Record<string, unknown>;
 export type Toolkit = {
   /** The run's anchor instant. Every generated date should derive from it. */
   readonly now: Date;
-  /** An id that is a pure function of `key` within this seed's target. */
+  /**
+   * An id that is a pure function of `key` within this seed. Put it on the
+   * row: the engine never reads it back, but a rerun then offers the same
+   * rows, and a dry run's handles name the rows a real run inserts.
+   */
   readonly id: (key: string) => string;
   /** A stream of this seed's own, derived from the run seed and the seed. */
   readonly random: Random;
 };
 
-export type Row<Insert extends object> = {
-  readonly id: string;
-  readonly row: Insert;
-};
-
 export type Handle<Insert extends object, A extends object> = A & {
-  /** Live: what a link sets through `update` or `updateIn` shows here. */
-  readonly all: ReadonlyArray<Row<Insert>>;
+  /** Live: what a link sets through `update` shows here. */
+  readonly all: ReadonlyArray<Insert>;
   /** Throws rather than hand back an undefined that lands as a null FK. */
-  readonly first: () => Row<Insert>;
+  readonly first: () => Insert;
 };
 
 /**
@@ -85,13 +84,10 @@ export type Run<X extends object> = {
   readonly stamp: (context: StampContext) => object;
   readonly insert: (
     seed: SeedMeta,
-    rows: ReadonlyArray<Row<object>>,
+    rows: ReadonlyArray<object>,
   ) => Promise<void>;
-  readonly update: (
-    seed: SeedMeta,
-    id: string,
-    values: object,
-  ) => Promise<void>;
+  /** Sets columns on a row some seed in this run built. */
+  readonly update: (row: object, values: object) => Promise<void>;
   /** The seed's defaults under its overrides, checked when planted. */
   readonly configOf: (seed: SeedMeta) => SeedConfig;
   /** Resolves a seed once per run, and refuses one that is still building. */
@@ -109,7 +105,7 @@ export type BuildArgs<C extends SeedConfig, X extends object> = Toolkit &
 
 export type AccessorArgs<Insert extends object, X extends object> = Toolkit &
   X & {
-    readonly rows: ReadonlyArray<Row<Insert>>;
+    readonly rows: ReadonlyArray<Insert>;
   };
 
 export type LinkArgs<
@@ -117,18 +113,16 @@ export type LinkArgs<
   C extends SeedConfig,
   X extends object,
 > = BuildArgs<C, X> & {
-  readonly rows: ReadonlyArray<Row<Insert>>;
-  /** Sets columns on one of this seed's own rows. */
-  readonly update: (id: string, values: Partial<Insert>) => Promise<void>;
+  readonly rows: ReadonlyArray<Insert>;
   /**
-   * Sets columns on a row belonging to another seed. A reciprocal pair has to
-   * be written from one place: writing only the side you own leaves the
-   * other table disagreeing, and nothing in the database says otherwise.
+   * Sets columns on a row from any handle in this run, this seed's own or
+   * another's. A reciprocal pair has to be written from one place: writing
+   * only the side you own leaves the other table disagreeing, and nothing in
+   * the database says otherwise.
    */
-  readonly updateIn: <OtherInsert extends object, OtherA extends object>(
-    seed: Seed<unknown, OtherInsert, OtherA, X>,
-    id: string,
-    values: Partial<OtherInsert>,
+  readonly update: <R extends object>(
+    row: R,
+    values: Partial<NoInfer<R>>,
   ) => Promise<void>;
 };
 
@@ -149,7 +143,7 @@ export type SeedDefinition<
   /**
    * Ids derive within this namespace. Two seeds writing the same target from
    * different worlds must set different ones, or they mint identical ids for
-   * unrelated rows and the run refuses the second.
+   * unrelated rows.
    */
   readonly namespace?: string | undefined;
   /** Config `override` may change. Every key must be declared here. */
@@ -217,28 +211,19 @@ export function seeder<
     const args = { ...toolkit, config: run.configOf(seed) as C, get: run.get };
     const built = await definition.build(args);
 
-    const written = built.map((row, index) => {
-      const id = ownId(row) ?? toolkit.id(`${name}#${index}`);
-
-      return {
-        id,
-        row: { id, ...run.stamp({ id, now: toolkit.now }), ...row },
-      };
-    });
+    // These objects are the handle: a link's update lands on them, so a
+    // dependent holding one sees it.
+    const written: ReadonlyArray<Insert> = built.map((row) => ({
+      ...run.stamp({ now: toolkit.now }),
+      ...row,
+    }));
 
     await run.insert(seed, written);
 
     const { link } = definition;
 
     if (link) {
-      run.defer(() =>
-        link({
-          ...args,
-          rows: written,
-          update: (id, values) => run.update(seed, id, values),
-          updateIn: (other, id, values) => run.update(other, id, values),
-        }),
-      );
+      run.defer(() => link({ ...args, rows: written, update: run.update }));
     }
 
     // With no accessors defined, `A` is inferred as `object`, so `{}` is one.
@@ -248,7 +233,7 @@ export function seeder<
     return {
       ...accessors,
       all: written,
-      first: (): Row<Insert> => {
+      first: (): Insert => {
         const [row] = written;
 
         if (!row) {
@@ -261,17 +246,6 @@ export function seeder<
   }
 
   return seed;
-}
-
-/** A row may bring its own id; the derived one is the fallback. */
-function ownId(row: object): string | undefined {
-  if (!("id" in row)) {
-    return undefined;
-  }
-
-  const { id } = row;
-
-  return id === undefined || id === null ? undefined : String(id);
 }
 
 export type HandleOf<S> =

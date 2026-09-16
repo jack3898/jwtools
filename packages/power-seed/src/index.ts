@@ -27,7 +27,6 @@ export type {
   HandleOf,
   LinkArgs,
   Overrides,
-  Row,
   Seed,
   SeedConfig,
   SeedDefinition,

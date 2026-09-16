@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Adapter } from "./adapter";
 import { plant, type SeedReport } from "./plant";
-import { type Row, type Seed, seeder } from "./seeder";
+import { type Seed, seeder } from "./seeder";
 
 /**
  * The behaviour every adapter must exhibit, written once and run against each
@@ -10,11 +10,13 @@ import { type Row, type Seed, seeder } from "./seeder";
  * that sets each author's favourite book) and profiles (one per author).
  */
 type AuthorShape = {
+  readonly id: string;
   readonly name: string;
   readonly favouriteBookId?: string | null | undefined;
 };
 
 type BookShape = {
+  readonly id: string;
   readonly authorId: string;
   readonly title: string;
 };
@@ -24,12 +26,12 @@ export type Harness<Target> = {
   readonly authors: Seed<
     Target,
     AuthorShape,
-    { readonly byName: (name: string) => Row<AuthorShape> }
+    { readonly byName: (name: string) => AuthorShape }
   >;
   readonly books: Seed<
     Target,
     BookShape,
-    { readonly forAuthor: (authorId: string) => ReadonlyArray<Row<BookShape>> }
+    { readonly forAuthor: (authorId: string) => ReadonlyArray<BookShape> }
   >;
   readonly profiles: Seed<Target, object, object>;
   /** Every stored row for a seed's target, in a stable order. */
@@ -60,13 +62,14 @@ export function harnessSeeds<Target>(
     target: targets.authors,
     name: names?.authors,
     defaults: { count: 3 },
-    build: ({ config }): Array<AuthorShape> =>
+    build: ({ config, id }): Array<AuthorShape> =>
       Array.from({ length: config.count }, (_, index) => ({
+        id: id(String(index)),
         name: `Author ${index + 1}`,
       })),
     accessors: ({ rows }) => ({
       byName: (name: string) => {
-        const found = rows.find((author) => author.row.name === name);
+        const found = rows.find((author) => author.name === name);
 
         if (!found) {
           throw new Error(`No author named "${name}"`);
@@ -81,11 +84,12 @@ export function harnessSeeds<Target>(
     target: targets.books,
     name: names?.books,
     defaults: { perAuthor: 2 },
-    build: async ({ config, random, get }): Promise<Array<BookShape>> => {
+    build: async ({ config, random, id, get }): Promise<Array<BookShape>> => {
       const { all } = await get(authors);
 
-      return all.flatMap((author) =>
-        Array.from({ length: config.perAuthor }, () => ({
+      return all.flatMap((author, authorIndex) =>
+        Array.from({ length: config.perAuthor }, (_, index) => ({
+          id: id(`${authorIndex}-${index}`),
           authorId: author.id,
           title: `${random.pick(ADJECTIVES)} ${random.pick(NOUNS)}`,
         })),
@@ -93,18 +97,18 @@ export function harnessSeeds<Target>(
     },
     accessors: ({ rows }) => ({
       forAuthor: (authorId: string) =>
-        rows.filter((book) => book.row.authorId === authorId),
+        rows.filter((book) => book.authorId === authorId),
     }),
     // authors.favouriteBookId points at books, which point back at authors,
     // so it can only be set once both are in.
-    link: async ({ get, rows, updateIn }) => {
+    link: async ({ get, rows, update }) => {
       const { all } = await get(authors);
 
       for (const author of all) {
-        const first = rows.find((book) => book.row.authorId === author.id);
+        const first = rows.find((book) => book.authorId === author.id);
 
         if (first) {
-          await updateIn(authors, author.id, { favouriteBookId: first.id });
+          await update(author, { favouriteBookId: first.id });
         }
       }
     },
@@ -113,12 +117,13 @@ export function harnessSeeds<Target>(
   const profiles = seeder({
     target: targets.profiles,
     name: names?.profiles,
-    build: async ({ get }) => {
+    build: async ({ get, id }) => {
       const { all } = await get(authors);
 
-      return all.map((author) => ({
+      return all.map((author, index) => ({
+        id: id(String(index)),
         authorId: author.id,
-        bio: `About ${author.row.name}`,
+        bio: `About ${author.name}`,
       }));
     },
   });
@@ -157,11 +162,9 @@ export function engineSuite<Target>(
       const author = authorHandle.byName("Author 2");
       const theirs = bookHandle.forAuthor(author.id);
 
-      expect(authorHandle.first().row.name).toBe("Author 1");
+      expect(authorHandle.first().name).toBe("Author 1");
       expect(theirs).toHaveLength(2);
-      expect(theirs.every((book) => book.row.authorId === author.id)).toBe(
-        true,
-      );
+      expect(theirs.every((book) => book.authorId === author.id)).toBe(true);
     });
 
     it("applies each seed's overrides, wherever it sits", async () => {

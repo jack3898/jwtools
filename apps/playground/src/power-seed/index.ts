@@ -3,20 +3,22 @@ import { memory, plant, seeder } from "@jack3898/power-seed";
 const teams = seeder({
   target: "teams",
   defaults: { names: ["Red", "Blue"] },
-  build: ({ config }) => config.names.map((name) => ({ name })),
+  build: ({ config, id }) =>
+    config.names.map((name) => ({ id: id(name), name })),
   accessors: ({ rows }) => ({
-    byName: (name: string) => rows.find((team) => team.row.name === name),
+    byName: (name: string) => rows.find((team) => team.name === name),
   }),
 });
 
 const players = seeder({
   target: "players",
   defaults: { perTeam: 3 },
-  build: async ({ config, random, get }) => {
+  build: async ({ config, random, id, get }) => {
     const { all } = await get(teams); // this IS the dependency
 
     return all.flatMap((team) =>
       Array.from({ length: config.perTeam }, (_, index) => ({
+        id: id(`${team.name}#${index}`),
         teamId: team.id,
         number: index + 1,
         rating: random.int({ min: 1, max: 99 }),

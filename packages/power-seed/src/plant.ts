@@ -93,17 +93,18 @@ function createRun<Target, X extends object>(
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const stack: Array<string> = [];
   const links: Array<() => Promise<void>> = [];
-  /**
-   * The row objects handles hold, by id, by target. A link's update lands on
-   * these too, so a handle never goes stale. Kept in a dry run as well: the
-   * handles it computes must match what a real run's would say.
-   */
-  const held = new Map<unknown, Map<string, object>>();
+  /** Which seed built each row a handle holds, so `update` knows its target. */
+  const owners = new WeakMap<object, SeedMeta>();
+  /** Keys written per target, kept on a dry run too so it fails the same. */
+  const written = new Map<unknown, Set<unknown>>();
 
   // The engine carries targets as `unknown` so seeds on different concrete
   // targets can depend on each other. The adapter is the one place that
   // knows what they really are.
   const targetOf = (meta: SeedMeta): Target => meta.target as Target;
+  // Handles hold plain objects; the adapter reads them as records.
+  const keyOf = (meta: SeedMeta, row: object): unknown =>
+    adapter.key(targetOf(meta), row as Record<string, unknown>);
 
   function nameOf(meta: SeedMeta): string {
     if (meta.name !== undefined) {
@@ -135,6 +136,7 @@ function createRun<Target, X extends object>(
     // Each seed draws from its own stream, keyed the way ids are, so its
     // values survive reordering, new dependencies and other entry points.
     toolkit: (meta): Toolkit & X => {
+      const name = nameOf(meta);
       const target = targetNameOf(meta);
       const within = meta.namespace ?? namespace;
       const derive = options.id ?? defaultId;
@@ -144,7 +146,10 @@ function createRun<Target, X extends object>(
         {
           now,
           random: createRandom(own),
-          id: (key: string) => derive({ target, key, namespace: within }),
+          // Keyed under the seed's name, so two seeds on one target never
+          // mint the same id for the same key.
+          id: (key: string) =>
+            derive({ target, key: `${name}#${key}`, namespace: within }),
         },
         options.extend?.({ seed: own, now }),
       );
@@ -152,50 +157,54 @@ function createRun<Target, X extends object>(
 
     stamp: (context) => adapter.stamp?.(context) ?? {},
 
-    // Ignoring conflicts is what makes a run repeatable: ids derive from
-    // identity, so a row already there is the same row.
+    // Ignoring conflicts is what makes a run repeatable: a builder's ids
+    // derive from identity, so a row already there is the same row.
     insert: async (meta, rows) => {
       const name = nameOf(meta);
       const targetName = targetNameOf(meta);
-      const heldRows = held.get(meta.target) ?? new Map<string, object>();
+      const target = targetOf(meta);
+      const keys = written.get(target) ?? new Set<unknown>();
 
-      held.set(meta.target, heldRows);
+      written.set(target, keys);
 
-      for (const { id, row } of rows) {
-        // Same id, same row, is what makes a rerun safe. Within one run it
-        // means two seeds minted the same id, and the adapter would keep the
-        // first while the second's handle vouches for rows that never landed.
-        if (heldRows.has(id)) {
+      for (const row of rows) {
+        const key = keyOf(meta, row);
+
+        // Same key, same row, is what makes a rerun safe. Within one run it
+        // means two rows would land as one, and a handle would vouch for a
+        // row that never did.
+        if (key != null && keys.has(key)) {
           throw new Error(
-            `Seed "${name}" minted id "${id}" for ${targetName}, which this run already wrote. Two seeds on one target need different names or namespaces.`,
+            `Seed "${name}" offered ${targetName} a row under key "${String(key)}", which this run already wrote. Two rows on one target need different keys.`,
           );
         }
 
-        heldRows.set(id, row);
+        keys.add(key);
+        owners.set(row, meta);
       }
 
       if (options.dryRun) {
         return;
       }
 
-      const target = targetOf(meta);
-      const written = await adapter.insert(
+      // Private copies, so the adapter can keep them without sharing the
+      // objects the handles hold.
+      const count = await adapter.insert(
         target,
-        rows.map(({ row }) => ({ ...row })),
+        rows.map((row) => ({ ...row })),
       );
 
       // A row can be skipped because it is already there, the same seed run
       // twice, or because a natural key rejected it, which the handle would
-      // otherwise still vouch for. Only the second is a problem, so check the
-      // ids rather than the count.
-      if (written !== undefined && written < rows.length && adapter.present) {
-        const offered = rows.map(({ id }) => id);
-        const present = new Set(await adapter.present(target, offered));
-        const missing = offered.filter((id) => !present.has(id));
+      // otherwise still vouch for. Only the second is a problem, so ask
+      // rather than trust the count.
+      if (count !== undefined && count < rows.length && adapter.present) {
+        const offered = rows.map((row) => keyOf(meta, row));
+        const missing = rows.length - (await adapter.present(target, offered));
 
-        if (missing.length > 0) {
+        if (missing > 0) {
           throw new Error(
-            `Seed "${name}" offered ${offered.length} rows to ${targetName} but ${missing.length} are not in it. A unique constraint other than the primary key rejected them, so their handles would name rows that do not exist.`,
+            `Seed "${name}" offered ${rows.length} rows to ${targetName} but ${missing} are not in it. A unique constraint other than the primary key rejected them, so their handles would name rows that do not exist.`,
           );
         }
       }
@@ -203,16 +212,30 @@ function createRun<Target, X extends object>(
       options.onSeed?.({ name, target: targetName, rows: rows.length });
     },
 
-    update: async (meta, id, values) => {
+    // The row is the reference: the adapter finds it by its key, and the
+    // handle's object is changed in place.
+    update: async (row, values) => {
+      const meta = owners.get(row);
+
+      if (!meta) {
+        throw new Error(
+          "update was handed a row no seed in this run built. Pass a row from a handle.",
+        );
+      }
+
+      const key = keyOf(meta, row);
+
+      if (key == null) {
+        throw new Error(
+          `A row of seed "${nameOf(meta)}" has no key, so nothing can find it to update it`,
+        );
+      }
+
       if (!options.dryRun) {
-        await adapter.update(targetOf(meta), id, { ...values });
+        await adapter.update(targetOf(meta), key, { ...values });
       }
 
-      const row = held.get(meta.target)?.get(id);
-
-      if (row) {
-        Object.assign(row, values);
-      }
+      Object.assign(row, values);
     },
 
     defer: (link) => {

@@ -15,7 +15,7 @@ export const books = seeder({
       { value: "long", weight: 1 },
     ],
   },
-  build: async ({ config, random, faker, now, get }) => {
+  build: async ({ config, random, faker, now, id, get }) => {
     const { all } = await get(authors);
     const earliest = new Date(now);
 
@@ -23,10 +23,11 @@ export const books = seeder({
       now.getUTCFullYear() - config.published.withinYears,
     );
 
-    return all.flatMap((author) =>
-      Array.from({ length: random.int(config.perAuthor) }, () => ({
+    return all.flatMap((author, authorIndex) =>
+      Array.from({ length: random.int(config.perAuthor) }, (_, index) => ({
+        id: id(`${authorIndex}-${index}`),
         authorId: author.id,
-        publisherId: author.row.publisherId,
+        publisherId: author.publisherId,
         title: faker.book.title(),
         publishedAt: random.dateBetween(earliest, now),
         pages:
@@ -38,24 +39,21 @@ export const books = seeder({
   },
   accessors: ({ rows }) => ({
     forAuthor: (authorId: string) =>
-      rows.filter((book) => book.row.authorId === authorId),
-    longest: () =>
-      [...rows].sort((a, b) => b.row.pages - a.row.pages)[0] ?? null,
+      rows.filter((book) => book.authorId === authorId),
+    longest: () => [...rows].sort((a, b) => b.pages - a.pages)[0] ?? null,
   }),
   // Publishers point at books and books at publishers, so this side is set
   // once every seed has inserted. Write a reciprocal pair from one place.
-  link: async ({ get, rows, updateIn }) => {
+  link: async ({ get, rows, update }) => {
     const { all } = await get(publishers);
 
     for (const publisher of all) {
       const flagship = rows
-        .filter((book) => book.row.publisherId === publisher.id)
-        .sort((a, b) => b.row.pages - a.row.pages)[0];
+        .filter((book) => book.publisherId === publisher.id)
+        .sort((a, b) => b.pages - a.pages)[0];
 
       if (flagship) {
-        await updateIn(publishers, publisher.id, {
-          flagshipBookId: flagship.id,
-        });
+        await update(publisher, { flagshipBookId: flagship.id });
       }
     }
   },

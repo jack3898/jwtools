@@ -8,10 +8,10 @@ import { seeder } from "./seeder";
 function droppingAdapter(present: boolean): Adapter<string> {
   return {
     nameOf: (target) => target,
+    key: (_target, row) => row.id,
     insert: (_target, rows) => Promise.resolve(rows.length - 1),
     present: present
-      ? (_target, ids: ReadonlyArray<string>) =>
-          Promise.resolve(ids.slice(0, -1))
+      ? (_target, keys) => Promise.resolve(keys.length - 1)
       : undefined,
     update: () => Promise.resolve(),
   };
@@ -19,7 +19,10 @@ function droppingAdapter(present: boolean): Adapter<string> {
 
 const pair = seeder({
   target: "things",
-  build: () => [{ n: 1 }, { n: 2 }],
+  build: ({ id }) => [
+    { id: id("1"), n: 1 },
+    { id: id("2"), n: 2 },
+  ],
 });
 
 describe("the insert check", () => {
@@ -36,8 +39,9 @@ describe("the insert check", () => {
   it("trusts an adapter that cannot count", async () => {
     const adapter: Adapter<string> = {
       nameOf: (target) => target,
+      key: (_target, row) => row.id,
       insert: () => Promise.resolve(undefined),
-      present: () => Promise.resolve([]),
+      present: () => Promise.resolve(0),
       update: () => Promise.resolve(),
     };
 
@@ -52,8 +56,8 @@ describe("dry runs", () => {
     const update = vi.spyOn(adapter, "update");
     const linked = seeder({
       target: "linked",
-      build: () => [{ value: 1 }],
-      link: ({ rows, update }) => update(rows[0]?.id ?? "", { value: 2 }),
+      build: ({ id }) => [{ id: id("1"), value: 1 }],
+      link: ({ rows, update }) => update(rows[0] ?? {}, { value: 2 }),
     });
 
     await plant(adapter, [linked], { dryRun: true });
@@ -64,16 +68,17 @@ describe("dry runs", () => {
 });
 
 describe("ids", () => {
-  it("lets a row bring its own", async () => {
-    const adapter = memory<string>();
-    const named = seeder({
-      target: "named",
-      build: () => [{ id: "chosen", value: 1 }, { value: 2 }],
+  it("are the builder's to place, so a row without one is stored as it is", async () => {
+    const store: MemoryStore<string> = new Map();
+    const adapter = memory<string>({ store });
+    const keyless = seeder({
+      target: "keyless",
+      build: () => [{ value: 1 }, { value: 2 }],
     });
-    const handle = (await plant(adapter, [named])).handle(named);
+    const handle = (await plant(adapter, [keyless])).handle(keyless);
 
-    expect(handle.all[0]?.id).toBe("chosen");
-    expect(handle.all[1]?.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(handle.all).toEqual([{ value: 1 }, { value: 2 }]);
+    expect(store.get("keyless")?.size).toBe(2);
   });
 
   it("can derive through a custom function", async () => {
@@ -86,18 +91,25 @@ describe("ids", () => {
     ).handle(pair);
 
     expect(handle.all.map((row) => row.id)).toEqual([
-      "ns/things/things#0",
       "ns/things/things#1",
+      "ns/things/things#2",
     ]);
   });
 
-  it("are refused when another seed in the run already minted them", async () => {
+  it("are refused when this run already wrote them", async () => {
     const adapter = memory<string>();
-    const one = seeder({ target: "things", build: () => [{ n: 1 }] });
-    const two = seeder({ target: "things", build: () => [{ n: 2 }] });
+    // Same target, same default name, same key: identical ids.
+    const one = seeder({
+      target: "things",
+      build: ({ id }) => [{ id: id("1") }],
+    });
+    const two = seeder({
+      target: "things",
+      build: ({ id }) => [{ id: id("1") }],
+    });
 
     await expect(plant(adapter, [one, two], { dryRun: true })).rejects.toThrow(
-      /^Seed "things" minted id "[0-9a-f-]{36}" for things, which this run already wrote/,
+      /^Seed "things" offered things a row under key "[0-9a-f-]{36}", which this run already wrote/,
     );
   });
 
@@ -107,7 +119,7 @@ describe("ids", () => {
     const renamedSeed = seeder({
       target: "things",
       name: "renamed",
-      build: () => [{ n: 1 }],
+      build: ({ id }) => [{ id: id("1"), n: 1 }],
     });
     const renamed = (
       await plant(adapter, [renamedSeed], { dryRun: true })
@@ -115,11 +127,11 @@ describe("ids", () => {
     const renamedAgain = seeder({
       target: "things",
       name: "renamed",
-      build: () => [{ n: 9 }],
+      build: ({ id }) => [{ id: id("1"), n: 9 }],
     });
 
-    // Same target and index, different seed name: the key differs by name,
-    // so the ids do too. Only the target half is shared.
+    // Same target and key, different seed name: the key is scoped by name,
+    // so the ids differ. Only the target half is shared.
     expect(plain.first().id).not.toBe(renamed.first().id);
     expect(renamed.first().id).toBe(
       (await plant(adapter, [renamedAgain], { dryRun: true }))
@@ -162,26 +174,33 @@ describe("links", () => {
 describe("handles", () => {
   const teams = seeder({
     target: "teams",
-    build: () => [{ name: "Red" }, { name: "Blue" }],
+    build: ({ id }) => [
+      { id: id("red"), name: "Red" },
+      { id: id("blue"), name: "Blue" },
+    ],
     accessors: ({ rows }) => ({
-      names: () => rows.map((team) => team.row.name),
+      names: () => rows.map((team) => team.name),
     }),
   });
   const players = seeder({
     target: "players",
-    build: async ({ get }) => {
+    build: async ({ get, id }) => {
       const { all } = await get(teams);
 
-      return all.map((team) => ({ teamId: team.id, captain: false }));
+      return all.map((team) => ({
+        id: id(team.name),
+        teamId: team.id,
+        captain: false,
+      }));
     },
-    link: async ({ rows, update, get, updateIn }) => {
+    link: async ({ rows, update, get }) => {
       for (const player of rows) {
-        await update(player.id, { captain: true });
+        await update(player, { captain: true });
       }
 
       const { first } = await get(teams);
 
-      await updateIn(teams, first().id, { name: "Crimson" });
+      await update(first(), { name: "Crimson" });
     },
   });
 
@@ -193,7 +212,7 @@ describe("handles", () => {
     const playerHandle = result.handle(players);
     const teamHandle = result.handle(teams);
 
-    expect(playerHandle.all.map((player) => player.row.captain)).toEqual([
+    expect(playerHandle.all.map((player) => player.captain)).toEqual([
       true,
       true,
     ]);
@@ -201,6 +220,32 @@ describe("handles", () => {
     // What the handle says is what was stored.
     expect(store.get("teams")?.get(teamHandle.first().id)?.name).toBe(
       "Crimson",
+    );
+  });
+
+  it("refuse to update a row that has no key", async () => {
+    const adapter = memory<string>();
+    const keyless = seeder({
+      target: "keyless",
+      build: () => [{ value: 1 }],
+      link: ({ rows, update }) => update(rows[0] ?? {}, { value: 2 }),
+    });
+
+    await expect(plant(adapter, [keyless], { dryRun: true })).rejects.toThrow(
+      'A row of seed "keyless" has no key',
+    );
+  });
+
+  it("refuse to update a row no handle in the run holds", async () => {
+    const adapter = memory<string>();
+    const stray = seeder({
+      target: "stray",
+      build: () => [{ value: 1 }],
+      link: ({ update }) => update({ value: 1 }, { value: 2 }),
+    });
+
+    await expect(plant(adapter, [stray])).rejects.toThrow(
+      "update was handed a row no seed in this run built",
     );
   });
 
@@ -276,8 +321,8 @@ describe("streams", () => {
   it("give a seed the same values whatever else is in the run", async () => {
     const adapter = memory<string>();
     const options = { dryRun: true };
-    const value = (handle: { first: () => { row: { value: number } } }) =>
-      handle.first().row.value;
+    const value = (handle: { first: () => { value: number } }) =>
+      handle.first().value;
 
     const alone = (await plant(adapter, [things], options)).handle(things);
     const after = (await plant(adapter, [noise, things], options)).handle(

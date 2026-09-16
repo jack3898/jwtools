@@ -22,19 +22,19 @@ function seeder<
 }
 
 const authorSchema = z.object({
-  id: z.string().optional(),
+  id: z.string(),
   name: z.string(),
   favouriteBookId: z.string().nullable().optional(),
 });
 
 const bookSchema = z.object({
-  id: z.string().optional(),
+  id: z.string(),
   authorId: z.string(),
   title: z.string(),
 });
 
 const profileSchema = z.object({
-  id: z.string().optional(),
+  id: z.string(),
   authorId: z.string(),
   bio: z.string(),
 });
@@ -66,10 +66,7 @@ engineSuite("zod schemas in memory", {
 
 describe("zod specifics", () => {
   it("validates every row through the schema", async () => {
-    const strict = z.object({
-      id: z.string().optional(),
-      name: z.string().min(3),
-    });
+    const strict = z.object({ name: z.string().min(3) });
     const tooShort = seeder({
       target: strict,
       name: "tooShort",
@@ -81,7 +78,7 @@ describe("zod specifics", () => {
 
   it("requires a name, since a schema has none", async () => {
     const anonymous = seeder({
-      target: z.object({ id: z.string().optional() }),
+      target: z.object({}),
       build: () => [{}],
     });
 
@@ -102,7 +99,7 @@ describe("zod specifics", () => {
     }
 
     const people = defineFakerSeed({
-      target: z.object({ id: z.string().optional(), name: z.string() }),
+      target: z.object({ name: z.string() }),
       name: "people",
       build: ({ faker }) =>
         Array.from({ length: 3 }, () => ({ name: faker.person.fullName() })),
@@ -115,8 +112,8 @@ describe("zod specifics", () => {
 
       return { faker };
     };
-    const names = (rows: ReadonlyArray<{ row: { name: string } }>) =>
-      rows.map(({ row }) => row.name);
+    const names = (rows: ReadonlyArray<{ name: string }>) =>
+      rows.map((row) => row.name);
 
     const first = (await plant(adapter, [people], { extend })).handle(people);
 

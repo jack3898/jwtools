@@ -14,6 +14,7 @@ export const authors = seeder({
       Array.from(
         { length: random.int(config.perPublisher) },
         (_, authorIndex) => ({
+          id: id(`${publisherIndex}-${authorIndex}`),
           publisherId: publisher.id,
           name: faker.person.fullName(),
           // A second derived id, for a column that must be unique and stable.
@@ -24,7 +25,7 @@ export const authors = seeder({
   },
   accessors: ({ rows, random }) => ({
     forPublisher: (publisherId: string) =>
-      rows.filter((author) => author.row.publisherId === publisherId),
+      rows.filter((author) => author.publisherId === publisherId),
     pickRandom: () => random.pick(rows),
   }),
 });
