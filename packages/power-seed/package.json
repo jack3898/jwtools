@@ -1,0 +1,69 @@
+{
+  "name": "@jack3898/power-seed",
+  "description": "Dependency-aware data seeding with zero dependencies. Bring your own schema and driver.",
+  "version": "0.1.0",
+  "author": "Jack Wright",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "nx": {
+    "sourceRoot": "{projectRoot}/src",
+    "projectType": "library",
+    "targets": {
+      "build": {
+        "defaultConfiguration": "build"
+      },
+      "prepack": {
+        "defaultConfiguration": "build"
+      },
+      "dev": {
+        "defaultConfiguration": "dev"
+      },
+      "type-check": {
+        "defaultConfiguration": "type-check"
+      },
+      "publish": {
+        "defaultConfiguration": "publish"
+      }
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "catalog:",
+    "@faker-js/faker": "catalog:",
+    "drizzle-orm": "catalog:",
+    "expect-type": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  },
+  "files": [
+    "./dist",
+    "./LICENSE",
+    "./README.md"
+  ],
+  "keywords": [
+    "database",
+    "deterministic",
+    "drizzle",
+    "esm",
+    "factory",
+    "fixtures",
+    "seed",
+    "seeder",
+    "seeding",
+    "test-data",
+    "type-safe",
+    "utility",
+    "vanilla",
+    "zod"
+  ],
+  "repository": "jack3898/jwtools.git",
+  "types": "./dist/index.d.ts"
+}
