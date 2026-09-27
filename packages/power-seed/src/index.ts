@@ -33,4 +33,4 @@ export type {
   SeedEntry,
   Toolkit,
 } from "./seeder";
-export { seeder } from "./seeder";
+export { seed, seedWith } from "./seeder";

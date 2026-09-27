@@ -2,7 +2,9 @@
  * Checked by `tsc`, not Vitest: a failing assertion or an unused
  * `@ts-expect-error` is a compile error.
  */
+import { type PgTable, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { expectTypeOf } from "expect-type";
+import { z } from "zod";
 import {
   type ConfigOf,
   type HandleOf,
@@ -10,8 +12,11 @@ import {
   plant,
   type SeedConfig,
   type SeedDefinition,
-  seeder,
+  seed,
+  seedWith,
 } from ".";
+import { seed as drizzleSeed, seedWith as drizzleSeedWith } from "./drizzle";
+import { zodAdapter, seed as zodSeed, seedWith as zodSeedWith } from "./zod";
 
 // Grouping only. The bodies never run; `tsc` still checks them.
 const describe = (_name: string, fn: () => void): void => void fn;
@@ -19,7 +24,7 @@ const it = (_name: string, fn: () => void): void => void fn;
 
 const adapter = memory<string>();
 
-const people = seeder({
+const people = seed({
   target: "people",
   defaults: { count: 2, ages: { min: 18, max: 65 } },
   build: ({ config, random }) =>
@@ -32,7 +37,7 @@ const people = seeder({
   }),
 });
 
-describe("seeder", () => {
+describe("seed", () => {
   it("infers the row shape from what build returns", () => {
     expectTypeOf<HandleOf<typeof people>>().toMatchTypeOf<{
       names: () => Array<string>;
@@ -49,7 +54,7 @@ describe("seeder", () => {
   });
 
   it("types the handle a builder gets from a dependency", () => {
-    seeder({
+    seed({
       target: "pets",
       build: async ({ get }) => {
         const owners = await get(people);
@@ -70,7 +75,7 @@ describe("seeder", () => {
       C extends SeedConfig,
       A extends object,
     >(definition: SeedDefinition<S, S["shape"], C, A>) {
-      return seeder(definition);
+      return seed(definition);
     }
 
     const schema: Schema<{ title: string }> = { shape: { title: "" } };
@@ -88,13 +93,7 @@ describe("seeder", () => {
 describe("extras", () => {
   type WithFaker = { readonly faker: { readonly word: () => string } };
 
-  function defineWithFaker<
-    C extends SeedConfig,
-    A extends object,
-    Insert extends object,
-  >(definition: SeedDefinition<string, Insert, C, A, WithFaker>) {
-    return seeder(definition);
-  }
+  const defineWithFaker = seedWith<WithFaker>();
 
   const words = defineWithFaker({
     target: "words",
@@ -105,10 +104,10 @@ describe("extras", () => {
 
   it("must be supplied when a seed needs them", () => {
     // @ts-expect-error extend is required when the seed needs extras
-    void plant(adapter, [words]);
-    void plant(adapter, [words], { extend });
-    void plant(adapter, [people], { extend });
-    void plant(adapter, [people]);
+    void plant({ into: adapter, seeds: [words] });
+    void plant({ into: adapter, seeds: [words] }, { extend });
+    void plant({ into: adapter, seeds: [people] }, { extend });
+    void plant({ into: adapter, seeds: [people] });
   });
 
   it("flow down the tree but never up", () => {
@@ -117,7 +116,7 @@ describe("extras", () => {
       build: async ({ get }) => [{ n: (await get(people)).names().length }],
     });
 
-    seeder({
+    seed({
       target: "notFine",
       build: async ({ get }) => {
         // @ts-expect-error a seed needing extras cannot be pulled from one without them
@@ -129,15 +128,15 @@ describe("extras", () => {
   });
 
   it("are checked across every seed in seed", () => {
-    void plant(adapter, [people, words], { extend });
+    void plant({ into: adapter, seeds: [people, words] }, { extend });
     // @ts-expect-error extend is required when any seed needs extras
-    void plant(adapter, [people, words]);
+    void plant({ into: adapter, seeds: [people, words] });
   });
 });
 
-describe("seed", () => {
+describe("plant", () => {
   it("hands back a typed handle for any planted seed", async () => {
-    const result = await plant(adapter, [people]);
+    const result = await plant({ into: adapter, seeds: [people] });
 
     expectTypeOf(result.handle(people).names()).toEqualTypeOf<Array<string>>();
     expectTypeOf(result.handle(people).first().age).toEqualTypeOf<number>();
@@ -146,7 +145,7 @@ describe("seed", () => {
   });
 
   it("types a link's update from the row it is handed", () => {
-    seeder({
+    seed({
       target: "pets",
       build: () => [{ name: "Rex", ownerName: "" }],
       link: async ({ rows, update, get }) => {
@@ -164,10 +163,16 @@ describe("seed", () => {
   });
 
   it("types overrides from the seed", async () => {
-    const bed = await plant(adapter, [people.override({ count: 1 })]);
+    const bed = await plant({
+      into: adapter,
+      seeds: [people.override({ count: 1 })],
+    });
 
     expectTypeOf(bed.handle(people).names()).toEqualTypeOf<Array<string>>();
-    void plant(adapter, [people.override({ ages: { max: 40 } })]);
+    void plant({
+      into: adapter,
+      seeds: [people.override({ ages: { max: 40 } })],
+    });
     // @ts-expect-error a key the seed does not declare
     people.override({ cuont: 1 });
     // @ts-expect-error the wrong type for a declared key
@@ -180,7 +185,7 @@ describe("adapters", () => {
     const objects = memory<{ readonly table: string }>();
 
     // @ts-expect-error a seed on a string target cannot run through an adapter for objects
-    void plant(objects, [people]);
+    void plant({ into: objects, seeds: [people] });
   });
 
   it("expose nothing beyond the adapter contract", () => {
@@ -188,5 +193,54 @@ describe("adapters", () => {
     adapter.rows;
     // @ts-expect-error the caller's own store is the only way to inspect it
     adapter.clear;
+  });
+});
+
+describe("subpaths", () => {
+  const schema = z.object({ title: z.string() });
+  const things = pgTable("things", {
+    id: uuid().primaryKey(),
+    title: text().notNull(),
+  });
+
+  it("type zod rows as the schema's input", () => {
+    zodSeed({ target: schema, name: "fine", build: () => [{ title: "ok" }] });
+    zodSeed({
+      target: schema,
+      name: "notFine",
+      // @ts-expect-error the row must match the schema's input
+      build: () => [{ title: 1 }],
+    });
+  });
+
+  it("type drizzle rows as the table's insert model", () => {
+    drizzleSeed({
+      target: things,
+      build: ({ id }) => [{ id: id("1"), title: "ok" }],
+    });
+    drizzleSeed({
+      target: things,
+      // @ts-expect-error the row must match the table's insert model
+      build: ({ id }) => [{ id: id("1"), title: 1 }],
+    });
+  });
+
+  it("pin extras on each subpath", () => {
+    type WithFaker = { readonly faker: { readonly word: () => string } };
+
+    const zodWords = zodSeedWith<WithFaker>()({
+      target: schema,
+      name: "words",
+      build: ({ faker }) => [{ title: faker.word() }],
+    });
+    const drizzleWords = drizzleSeedWith<WithFaker>()({
+      target: things,
+      build: ({ id, faker }) => [{ id: id("1"), title: faker.word() }],
+    });
+
+    // @ts-expect-error extend is required when the seed needs extras
+    void plant({ into: zodAdapter(), seeds: [zodWords] });
+    // @ts-expect-error extend is required when the seed needs extras
+    void plant({ into: memory<PgTable>(), seeds: [drizzleWords] });
   });
 });

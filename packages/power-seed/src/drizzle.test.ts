@@ -1,14 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
+import { getTableColumns } from "drizzle-orm";
 import {
-  eq,
-  getTableColumns,
-  getTableName,
-  type InferInsertModel,
-  inArray,
-} from "drizzle-orm";
-import {
-  type PgDatabase,
-  type PgQueryResultHKT,
   type PgTable,
   pgTable,
   text,
@@ -17,84 +9,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
+import { drizzleAdapter, seed } from "./drizzle";
 import { engineSuite, harnessSeeds } from "./engine.suite";
-import {
-  type Adapter,
-  seeder as define,
-  plant,
-  type SeedConfig,
-  type SeedDefinition,
-} from "./index";
-
-/** The README's Drizzle block, verbatim: pins the row type to the table. */
-function seeder<
-  T extends PgTable,
-  C extends SeedConfig,
-  A extends object,
-  X extends object = object,
->(definition: SeedDefinition<T, InferInsertModel<T>, C, A, X>) {
-  return define(definition);
-}
-
-/** The README's Drizzle adapter, verbatim. */
-function drizzleAdapter(db: PgDatabase<PgQueryResultHKT>): Adapter<PgTable> {
-  const BATCH = 1000;
-
-  /** The table's primary key, as the row's property and the column. */
-  function primaryKey(table: PgTable) {
-    const found = Object.entries(getTableColumns(table)).find(
-      ([, column]) => column.primary,
-    );
-
-    if (!found) {
-      throw new Error(`${getTableName(table)} has no primary key column`);
-    }
-
-    return found;
-  }
-
-  return {
-    nameOf: (table) => getTableName(table),
-
-    key: (table, row) => row[primaryKey(table)[0]],
-
-    // Drizzle drops keys a table lacks, so tables without timestamps are fine.
-    stamp: ({ now }) => ({ createdAt: now, updatedAt: now }),
-
-    insert: async (table, rows) => {
-      let written = 0;
-
-      for (let start = 0; start < rows.length; start += BATCH) {
-        const inserted = await db
-          .insert(table)
-          .values([...rows.slice(start, start + BATCH)])
-          .onConflictDoNothing()
-          .returning({ key: primaryKey(table)[1] });
-
-        written += inserted.length;
-      }
-
-      return written;
-    },
-
-    present: async (table, keys) => {
-      const column = primaryKey(table)[1];
-      const found = await db
-        .select({ key: column })
-        .from(table)
-        .where(inArray(column, [...keys]));
-
-      return found.length;
-    },
-
-    update: async (table, key, values) => {
-      await db
-        .update(table)
-        .set(values)
-        .where(eq(primaryKey(table)[1], key));
-    },
-  };
-}
+import { plant } from "./index";
 
 const authorsTable = pgTable("authors", {
   id: uuid().primaryKey().defaultRandom(),
@@ -199,15 +116,18 @@ describe("drizzle specifics", () => {
   it("names seeds after their table in camelCase", async () => {
     const reports: Array<string> = [];
 
-    await plant(adapter, [profiles], {
-      onSeed: (report) => reports.push(`${report.name}:${report.target}`),
-    });
+    await plant(
+      { into: adapter, seeds: [profiles] },
+      {
+        onSeed: (report) => reports.push(`${report.name}:${report.target}`),
+      },
+    );
 
     expect(reports).toEqual(["authors:authors", "profiles:profiles"]);
   });
 
   it("refuses rows a unique constraint silently dropped", async () => {
-    const duplicates = seeder({
+    const duplicates = seed({
       target: authorsTable,
       name: "duplicates",
       build: ({ id }) => [
@@ -216,7 +136,7 @@ describe("drizzle specifics", () => {
       ],
     });
 
-    await expect(plant(adapter, [duplicates])).rejects.toThrow(
+    await expect(plant({ into: adapter, seeds: [duplicates] })).rejects.toThrow(
       'Seed "duplicates" offered 2 rows to authors but 1 are not in it',
     );
   });

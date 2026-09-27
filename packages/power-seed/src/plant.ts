@@ -12,7 +12,7 @@ type Plantable<Target, X extends object> =
 export type Planted<P> = P extends SeedEntry<infer S> ? S : P;
 
 export type Bed<P extends ReadonlyArray<unknown>> = {
-  readonly handle: <T extends Planted<P[number]>>(seeder: T) => HandleOf<T>;
+  readonly handle: <T extends Planted<P[number]>>(seed: T) => HandleOf<T>;
 };
 
 /**
@@ -24,45 +24,44 @@ export async function plant<
   P extends ReadonlyArray<Plantable<NoInfer<Target>, X>>,
   X extends object = object,
 >(
-  adapter: Adapter<Target>,
-  plantings: P,
+  { into, seeds }: { readonly into: Adapter<Target>; readonly seeds: P },
   ...args: RunArgs<X>
 ): Promise<Bed<P>> {
   const [options] = args;
   const configs = new Map<object, SeedConfig>();
-  const shared = createRun(adapter, options ?? {}, configs);
+  const shared = createRun(into, options ?? {}, configs);
   // Read through the constraint, so a bare seed and an override tell apart.
-  const list: ReadonlyArray<Plantable<Target, X>> = plantings;
-  const seeders: Array<Seed<Target, object, object, X>> = [];
+  const list: ReadonlyArray<Plantable<Target, X>> = seeds;
+  const bare: Array<Seed<Target, object, object, X>> = [];
 
   for (const planting of list) {
-    const { seeder, config } =
-      "seeder" in planting ? planting : { seeder: planting, config: undefined };
-    const name = shared.nameOf(seeder);
+    const { seed, config } =
+      "seed" in planting ? planting : { seed: planting, config: undefined };
+    const name = shared.nameOf(seed);
 
-    if (configs.has(seeder)) {
+    if (configs.has(seed)) {
       throw new Error(`Seed "${name}" is planted twice`);
     }
 
-    configs.set(seeder, resolveConfig(name, seeder.defaults, config ?? {}));
-    seeders.push(seeder);
+    configs.set(seed, resolveConfig(name, seed.defaults, config ?? {}));
+    bare.push(seed);
   }
 
   const handles = new Map<object, unknown>();
   const get = shared.getFor();
 
-  for (const seeder of seeders) {
-    handles.set(seeder, await get(seeder));
+  for (const seed of bare) {
+    handles.set(seed, await get(seed));
   }
 
   await shared.runLinks();
 
   return {
-    handle: <T extends Planted<P[number]>>(seeder: T) => {
-      const handle = handles.get(seeder);
+    handle: <T extends Planted<P[number]>>(seed: T) => {
+      const handle = handles.get(seed);
 
       if (handle === undefined) {
-        throw new Error(`Seed "${shared.nameOf(seeder)}" was not planted`);
+        throw new Error(`Seed "${shared.nameOf(seed)}" was not planted`);
       }
 
       // Stored under the seed it came from, so it is that seed's handle.

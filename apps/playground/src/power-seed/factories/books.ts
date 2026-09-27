@@ -1,9 +1,9 @@
 import { bookSchema } from "../schema.js";
-import { seeder } from "../setup.js";
+import { seed } from "../setup.js";
 import { authors } from "./authors.js";
 import { publishers } from "./publishers.js";
 
-export const books = seeder({
+export const books = seed({
   target: bookSchema,
   name: "books",
   defaults: {

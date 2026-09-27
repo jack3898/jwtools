@@ -1,7 +1,7 @@
 import { publisherSchema } from "../schema.js";
-import { seeder } from "../setup.js";
+import { seed } from "../setup.js";
 
-export const publishers = seeder({
+export const publishers = seed({
   target: publisherSchema,
   name: "publishers",
   defaults: { names: ["Penguin"] },

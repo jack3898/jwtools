@@ -2,24 +2,8 @@ import { en, Faker } from "@faker-js/faker";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { engineSuite, harnessSeeds } from "./engine.suite";
-import {
-  seeder as define,
-  type MemoryStore,
-  memory,
-  plant,
-  type SeedConfig,
-  type SeedDefinition,
-} from "./index";
-
-/** The README's Zod block, verbatim: pins the row type to the schema's input. */
-function seeder<
-  S extends z.ZodObject,
-  C extends SeedConfig,
-  A extends object,
-  X extends object = object,
->(definition: SeedDefinition<S, z.input<S>, C, A, X>) {
-  return define(definition);
-}
+import { type MemoryStore, plant } from "./index";
+import { seed, seedWith, zodAdapter } from "./zod";
 
 const authorSchema = z.object({
   id: z.string(),
@@ -40,10 +24,7 @@ const profileSchema = z.object({
 });
 
 const store: MemoryStore<z.ZodObject> = new Map();
-const adapter = memory<z.ZodObject>({
-  store,
-  parse: (schema, row) => schema.parse(row),
-});
+const adapter = zodAdapter({ store });
 
 const { authors, books, profiles } = harnessSeeds<z.ZodObject>(
   { authors: authorSchema, books: bookSchema, profiles: profileSchema },
@@ -67,22 +48,24 @@ engineSuite("zod schemas in memory", {
 describe("zod specifics", () => {
   it("validates every row through the schema", async () => {
     const strict = z.object({ name: z.string().min(3) });
-    const tooShort = seeder({
+    const tooShort = seed({
       target: strict,
       name: "tooShort",
       build: () => [{ name: "ab" }],
     });
 
-    await expect(plant(adapter, [tooShort])).rejects.toThrow(/Too small/);
+    await expect(plant({ into: adapter, seeds: [tooShort] })).rejects.toThrow(
+      /Too small/,
+    );
   });
 
   it("requires a name, since a schema has none", async () => {
-    const anonymous = seeder({
+    const anonymous = seed({
       target: z.object({}),
       build: () => [{}],
     });
 
-    await expect(plant(adapter, [anonymous])).rejects.toThrow(
+    await expect(plant({ into: adapter, seeds: [anonymous] })).rejects.toThrow(
       "A seed on a target the adapter cannot name must set `name`",
     );
   });
@@ -90,44 +73,45 @@ describe("zod specifics", () => {
   it("takes faker through extend, seeded from the run", async () => {
     type WithFaker = { readonly faker: Faker };
 
-    function defineFakerSeed<
-      S extends z.ZodObject,
-      C extends SeedConfig,
-      A extends object,
-    >(definition: SeedDefinition<S, z.input<S>, C, A, WithFaker>) {
-      return define(definition);
-    }
+    const seedWithFaker = seedWith<WithFaker>();
 
-    const people = defineFakerSeed({
+    const people = seedWithFaker({
       target: z.object({ name: z.string() }),
       name: "people",
       build: ({ faker }) =>
         Array.from({ length: 3 }, () => ({ name: faker.person.fullName() })),
     });
 
-    const extend = ({ seed }: { seed: number }) => {
+    const extend = ({ seed: own }: { seed: number }) => {
       const faker = new Faker({ locale: [en] });
 
-      faker.seed(seed);
+      faker.seed(own);
 
       return { faker };
     };
     const names = (rows: ReadonlyArray<{ name: string }>) =>
       rows.map((row) => row.name);
 
-    const first = (await plant(adapter, [people], { extend })).handle(people);
+    const first = (
+      await plant({ into: adapter, seeds: [people] }, { extend })
+    ).handle(people);
 
     store.clear();
 
-    const again = (await plant(adapter, [people], { extend })).handle(people);
+    const again = (
+      await plant({ into: adapter, seeds: [people] }, { extend })
+    ).handle(people);
 
     store.clear();
 
     const other = (
-      await plant(adapter, [people], {
-        extend,
-        seed: 2,
-      })
+      await plant(
+        { into: adapter, seeds: [people] },
+        {
+          extend,
+          seed: 2,
+        },
+      )
     ).handle(people);
 
     expect(names(again.all)).toEqual(names(first.all));
