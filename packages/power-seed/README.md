@@ -17,9 +17,9 @@ Any runtime with ESM support. The package has no dependencies and touches no pla
 ## The idea in one file
 
 ```ts
-import { seeder, memory, plant } from "@jack3898/power-seed";
+import { seed, memory, plant } from "@jack3898/power-seed";
 
-const teams = seeder({
+const teams = seed({
   target: "teams",
   defaults: { names: ["Red", "Blue"] },
   build: ({ config, id }) =>
@@ -29,7 +29,7 @@ const teams = seeder({
   }),
 });
 
-const players = seeder({
+const players = seed({
   target: "players",
   defaults: { perTeam: 3 },
   build: async ({ config, random, id, get }) => {
@@ -47,9 +47,10 @@ const players = seeder({
 });
 
 const adapter = memory<string>();
-const bed = await plant(adapter, [
-  players.override({ perTeam: 2 }),
-]);
+const bed = await plant({
+  into: adapter,
+  seeds: [players.override({ perTeam: 2 })],
+});
 
 bed.handle(players).all; // every player row, as built
 ```
@@ -62,7 +63,7 @@ Three things happened there:
 
 ## Bringing your schema
 
-The `target` field is opaque to the engine. Two small pieces of code, both yours to copy, make any schema library a first-class citizen: a typed `seeder` wrapper that pins the row type to the target, and an adapter that knows how to write to it. Both are checked verbatim in this package's test suite against real libraries, as dev dependencies only.
+The `target` field is opaque to the engine. Two small pieces of code, both yours to copy, make any schema library a first-class citizen: a typed `seed` wrapper that pins the row type to the target, and an adapter that knows how to write to it. Both are checked verbatim in this package's test suite against real libraries, as dev dependencies only.
 
 ### Zod
 
@@ -70,14 +71,14 @@ Rows are typed as the schema's input, and the memory adapter validates every row
 
 ```ts
 import {
-  seeder as define,
+  seed as define,
   memory,
   type SeedConfig,
   type SeedDefinition,
 } from "@jack3898/power-seed";
 import { z } from "zod";
 
-export function seeder<
+export function seed<
   S extends z.ZodObject,
   C extends SeedConfig,
   A extends object,
@@ -97,7 +98,7 @@ const authorSchema = z.object({
   name: z.string(),
 });
 
-const authors = seeder({
+const authors = seed({
   target: authorSchema,
   name: "authors", // a schema has no name, so the seed must
   build: ({ id }) => [
@@ -114,7 +115,7 @@ Rows are typed as the table's insert model, and the adapter reads each table's p
 ```ts
 import {
   type Adapter,
-  seeder as define,
+  seed as define,
   type SeedConfig,
   type SeedDefinition,
 } from "@jack3898/power-seed";
@@ -131,7 +132,7 @@ import type {
   PgTable,
 } from "drizzle-orm/pg-core";
 
-export function seeder<
+export function seed<
   T extends PgTable,
   C extends SeedConfig,
   A extends object,
@@ -209,7 +210,7 @@ Seeds then look exactly like the Zod ones, with a table in place of a schema and
 The same two pieces. For Kysely the target is a table name and the wrapper pins `Insertable<DB[T]>`:
 
 ```ts
-export function seeder<
+export function seed<
   T extends keyof DB & string,
   C extends SeedConfig,
   A extends object,
@@ -272,7 +273,7 @@ import { Faker, en } from "@faker-js/faker";
 
 type WithFaker = { faker: Faker };
 
-export function seeder<
+export function seed<
   S extends z.ZodObject,
   C extends SeedConfig,
   A extends object,
@@ -280,7 +281,7 @@ export function seeder<
   return define(definition);
 }
 
-const people = seeder({
+const people = seed({
   target: personSchema,
   name: "people",
   build: ({ faker }) =>
@@ -288,8 +289,7 @@ const people = seeder({
 });
 
 await plant(
-  adapter,
-  [people],
+  { into: adapter, seeds: [people] },
   {
     extend: ({ seed }) => {
       const faker = new Faker({ locale: [en] });
@@ -315,8 +315,7 @@ A run is reproducible when every value derives from the run's inputs. The rules:
 
 ```ts
 await plant(
-  adapter,
-  [players],
+  { into: adapter, seeds: [players] },
   {
     seed: 42, // random stream
     now: new Date("2026-01-01T00:00:00Z"), // the anchor every date derives from
@@ -331,10 +330,10 @@ Both default to fixed values, so a run with no options is reproducible too.
 `defaults` declares every key a seed accepts, and `override` is typed from them. A seed reached only through another is configured by planting it with overrides too:
 
 ```ts
-await plant(adapter, [
-  teams.override({ names: ["Gold"] }),
-  players.override({ perTeam: 1 }),
-]);
+await plant({
+  into: adapter,
+  seeds: [teams.override({ names: ["Gold"] }), players.override({ perTeam: 1 })],
+});
 ```
 
 Nested objects merge, so `{ ages: { max: 40 } }` keeps the default `min`. Arrays replace, because a partial weighting table means nothing. A key the seed does not declare is an error, at compile time and again at runtime, so a typo cannot silently apply to nothing.
@@ -344,7 +343,7 @@ Nested objects merge, so `{ ages: { max: 40 } }` keeps the default `min`. Arrays
 Every seed resolves to a handle: the rows it wrote, exactly as the builder returned them, a `first()` that throws rather than hand back an undefined that lands as a null foreign key, and whatever `accessors` defines on top. Handles are live: what a link sets through `update` shows in `all`, `first()` and the accessors.
 
 ```ts
-const users = seeder({
+const users = seed({
   target: usersTable,
   build: /* ... */,
   accessors: ({ rows, random }) => ({
@@ -361,7 +360,7 @@ Accessors are what dependents use to build foreign keys: `(await get(users)).for
 Two tables that point at each other cannot both be satisfied at insert time. A `link` runs once every seed in the run has inserted, and may call `get` on a seed that depends on this one without tripping the cycle guard:
 
 ```ts
-const books = seeder({
+const books = seed({
   target: booksTable,
   build: async ({ get }) => /* one row per author */,
   link: async ({ get, rows, update }) => {
@@ -384,7 +383,7 @@ const books = seeder({
 
 ```ts
 const foundation = [tenants, sites, roles, users];
-const bed = await plant(adapter, foundation, { dryRun: true });
+const bed = await plant({ into: adapter, seeds: foundation }, { dryRun: true });
 ```
 
 Nothing is written, but the handles name exactly the rows a real run inserts, as long as the builders put ids from the toolkit on their rows. A row whose key the database assigns has no key on a dry run, and neither does anything built from it. A test suite can take handles at module level for free and do the only actual seeding in `beforeEach`.
@@ -393,8 +392,7 @@ Nothing is written, but the handles name exactly the rows a real run inserts, as
 
 ```ts
 await plant(
-  adapter,
-  [players],
+  { into: adapter, seeds: [players] },
   {
     onSeed: ({ name, target, rows }) =>
       console.log(`${name} -> ${target}: ${rows} rows`),
@@ -411,7 +409,7 @@ Fires for every seed the run wrote, deepest first. `rows` counts rows offered, n
 ```ts
 export const INTEGRATION = "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14";
 
-const tenants = seeder({
+const tenants = seed({
   target: tenantsTable,
   namespace: INTEGRATION /* ... */,
 });
@@ -426,16 +424,15 @@ The implementation ships its own SHA-1, forty lines that never change, so no cry
 One call. Every seed planted grows, with everything beneath it, in one bed, and `handle(seed)` hands back any planted seed's handle, typed by the seed:
 
 ```ts
-const bed = await plant(adapter, [
-  publishers,
-  authors,
-  books,
-]);
+const bed = await plant({
+  into: adapter,
+  seeds: [publishers, authors, books],
+});
 
 bed.handle(books).forAuthor(bed.handle(authors).first().id); // every handle keeps its accessors
 ```
 
-Seeds planted together share one run, so a seed two of them depend on is built once. A reusable set is just an array to spread: `plant(adapter, [...foundation, mine])`. When a seed needs extras, `options` stops being optional.
+Seeds planted together share one run, so a seed two of them depend on is built once. A reusable set is just an array to spread: `plant({ into: adapter, seeds: [...foundation, mine] })`. When a seed needs extras, `options` stops being optional.
 
 ## Stability
 

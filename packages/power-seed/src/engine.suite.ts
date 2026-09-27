@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Adapter } from "./adapter";
 import { plant } from "./plant";
 import type { SeedReport } from "./run/options";
-import { type Seed, seeder } from "./seeder";
+import { type Seed, seed } from "./seeder";
 
 /** The behaviour every adapter must exhibit, run against each storage layer. */
 type AuthorShape = {
@@ -51,7 +51,7 @@ export function harnessSeeds<Target>(
   targets: Targets<Target>,
   names?: Targets<string>,
 ) {
-  const authors = seeder({
+  const authors = seed({
     target: targets.authors,
     name: names?.authors,
     defaults: { count: 3 },
@@ -73,7 +73,7 @@ export function harnessSeeds<Target>(
     }),
   });
 
-  const books = seeder({
+  const books = seed({
     target: targets.books,
     name: names?.books,
     defaults: { perAuthor: 2 },
@@ -107,7 +107,7 @@ export function harnessSeeds<Target>(
     },
   });
 
-  const profiles = seeder({
+  const profiles = seed({
     target: targets.profiles,
     name: names?.profiles,
     build: async ({ get, id }) => {
@@ -134,14 +134,14 @@ export function engineSuite<Target>(
     beforeEach(() => reset());
 
     it("builds every dependency beneath the leaf", async () => {
-      await plant(adapter, [books]);
+      await plant({ into: adapter, seeds: [books] });
 
       expect(await rows(authors)).toHaveLength(3);
       expect(await rows(books)).toHaveLength(6);
     });
 
     it("builds a shared dependency once", async () => {
-      await plant(adapter, [books, profiles]);
+      await plant({ into: adapter, seeds: [books, profiles] });
 
       expect(await rows(authors)).toHaveLength(3);
       expect(await rows(books)).toHaveLength(6);
@@ -149,7 +149,7 @@ export function engineSuite<Target>(
     });
 
     it("hands back accessors over the rows it wrote", async () => {
-      const result = await plant(adapter, [authors, books]);
+      const result = await plant({ into: adapter, seeds: [authors, books] });
       const authorHandle = result.handle(authors);
       const bookHandle = result.handle(books);
       const author = authorHandle.byName("Author 2");
@@ -162,10 +162,13 @@ export function engineSuite<Target>(
 
     it("applies each seed's overrides, wherever it sits", async () => {
       // `authors` is only reached through `books`; listing it configures it.
-      await plant(adapter, [
-        authors.override({ count: 1 }),
-        books.override({ perAuthor: 3 }),
-      ]);
+      await plant({
+        into: adapter,
+        seeds: [
+          authors.override({ count: 1 }),
+          books.override({ perAuthor: 3 }),
+        ],
+      });
 
       expect(await rows(authors)).toHaveLength(1);
       expect(await rows(books)).toHaveLength(3);
@@ -173,36 +176,38 @@ export function engineSuite<Target>(
 
     it("rejects a config key the seed does not declare", async () => {
       await expect(
-        plant(adapter, [authors.override({ cuont: 1 })]),
+        plant({ into: adapter, seeds: [authors.override({ cuont: 1 })] }),
       ).rejects.toThrow(
         'Seed "authors" has no config named: cuont. Accepts: count',
       );
     });
 
     it("is a no-op the second time", async () => {
-      await plant(adapter, [books]);
+      await plant({ into: adapter, seeds: [books] });
 
       const before = await rows(books);
 
-      await plant(adapter, [books]);
+      await plant({ into: adapter, seeds: [books] });
 
       expect(await rows(books)).toEqual(before);
       expect(await rows(authors)).toHaveLength(3);
     });
 
     it("refuses to hand back a first row when the seed built none", async () => {
-      const empty = seeder({
+      const empty = seed({
         name: "nothing",
         target: authors.target,
         build: () => [],
       });
-      const handle = (await plant(adapter, [empty])).handle(empty);
+      const handle = (await plant({ into: adapter, seeds: [empty] })).handle(
+        empty,
+      );
 
       expect(() => handle.first()).toThrow('Seed "nothing" produced no rows');
     });
 
     it("reports a dependency cycle", async () => {
-      const loop: Seed<Target, object, object> = seeder({
+      const loop: Seed<Target, object, object> = seed({
         name: "loop",
         target: authors.target,
         build: async ({ get }) => {
@@ -212,18 +217,18 @@ export function engineSuite<Target>(
         },
       });
 
-      await expect(plant(adapter, [loop])).rejects.toThrow(
+      await expect(plant({ into: adapter, seeds: [loop] })).rejects.toThrow(
         "Seed dependency cycle: loop -> loop",
       );
     });
 
     it("lets a builder get two seeds at once when one needs the other", async () => {
-      const inner = seeder({
+      const inner = seed({
         name: "inner",
         target: authors.target,
         build: () => [],
       });
-      const outer = seeder({
+      const outer = seed({
         name: "outer",
         target: authors.target,
         build: async ({ get }) => {
@@ -232,7 +237,7 @@ export function engineSuite<Target>(
           return [];
         },
       });
-      const both = seeder({
+      const both = seed({
         name: "both",
         target: authors.target,
         build: async ({ get }) => {
@@ -242,11 +247,13 @@ export function engineSuite<Target>(
         },
       });
 
-      await expect(plant(adapter, [both])).resolves.toBeDefined();
+      await expect(
+        plant({ into: adapter, seeds: [both] }),
+      ).resolves.toBeDefined();
     });
 
     it("reports a cycle between two seeds", async () => {
-      const left: Seed<Target, object, object> = seeder({
+      const left: Seed<Target, object, object> = seed({
         name: "left",
         target: authors.target,
         build: async ({ get }) => {
@@ -255,7 +262,7 @@ export function engineSuite<Target>(
           return [];
         },
       });
-      const right: Seed<Target, object, object> = seeder({
+      const right: Seed<Target, object, object> = seed({
         name: "right",
         target: authors.target,
         build: async ({ get }) => {
@@ -265,13 +272,13 @@ export function engineSuite<Target>(
         },
       });
 
-      await expect(plant(adapter, [left])).rejects.toThrow(
+      await expect(plant({ into: adapter, seeds: [left] })).rejects.toThrow(
         "Seed dependency cycle: left -> right -> left",
       );
     });
 
     it("reports a cycle however its two sides interleave", async () => {
-      const left: Seed<Target, object, object> = seeder({
+      const left: Seed<Target, object, object> = seed({
         name: "left",
         target: authors.target,
         build: async ({ get }) => {
@@ -280,7 +287,7 @@ export function engineSuite<Target>(
           return [];
         },
       });
-      const right: Seed<Target, object, object> = seeder({
+      const right: Seed<Target, object, object> = seed({
         name: "right",
         target: authors.target,
         build: async ({ get }) => {
@@ -291,7 +298,7 @@ export function engineSuite<Target>(
           return [];
         },
       });
-      const both = seeder({
+      const both = seed({
         name: "both",
         target: authors.target,
         build: async ({ get }) => {
@@ -302,13 +309,13 @@ export function engineSuite<Target>(
       });
 
       // A missed cycle hangs rather than throws, hence the short timeout.
-      await expect(plant(adapter, [both])).rejects.toThrow(
+      await expect(plant({ into: adapter, seeds: [both] })).rejects.toThrow(
         "Seed dependency cycle: left -> right -> left",
       );
     }, 2000);
 
     it("runs links once every seed has inserted", async () => {
-      await plant(adapter, [books]);
+      await plant({ into: adapter, seeds: [books] });
 
       const written = await rows(authors);
       const bookIds = new Set((await rows(books)).map((row) => row.id));
@@ -321,14 +328,16 @@ export function engineSuite<Target>(
     });
 
     it("computes the same ids on a dry run as on a real one", async () => {
-      const dry = (await plant(adapter, [books], { dryRun: true })).handle(
-        books,
-      );
+      const dry = (
+        await plant({ into: adapter, seeds: [books] }, { dryRun: true })
+      ).handle(books);
 
       expect(await rows(books)).toHaveLength(0);
       expect(await rows(authors)).toHaveLength(0);
 
-      const real = (await plant(adapter, [books])).handle(books);
+      const real = (await plant({ into: adapter, seeds: [books] })).handle(
+        books,
+      );
 
       expect(real.all.map((row) => row.id)).toEqual(
         dry.all.map((row) => row.id),
@@ -338,9 +347,12 @@ export function engineSuite<Target>(
     it("reports each target beneath the leaf, deepest first", async () => {
       const reports: Array<SeedReport> = [];
 
-      await plant(adapter, [books], {
-        onSeed: (report) => reports.push(report),
-      });
+      await plant(
+        { into: adapter, seeds: [books] },
+        {
+          onSeed: (report) => reports.push(report),
+        },
+      );
 
       expect(reports.map((report) => [report.name, report.rows])).toEqual([
         ["authors", 3],
@@ -352,18 +364,18 @@ export function engineSuite<Target>(
       const titles = async () => (await rows(books)).map((row) => row.title);
       const ids = async () => (await rows(books)).map((row) => row.id);
 
-      await plant(adapter, [books]);
+      await plant({ into: adapter, seeds: [books] });
 
       const firstTitles = await titles();
       const firstIds = await ids();
 
       await reset();
-      await plant(adapter, [books]);
+      await plant({ into: adapter, seeds: [books] });
 
       expect(await titles()).toEqual(firstTitles);
 
       await reset();
-      await plant(adapter, [books], { seed: 7 });
+      await plant({ into: adapter, seeds: [books] }, { seed: 7 });
 
       expect(await titles()).not.toEqual(firstTitles);
       // Ids derive from identity, never from the random stream.
@@ -372,15 +384,21 @@ export function engineSuite<Target>(
 
     it("derives ids within the run's namespace", async () => {
       const first = (
-        await plant(adapter, [authors], {
-          dryRun: true,
-        })
+        await plant(
+          { into: adapter, seeds: [authors] },
+          {
+            dryRun: true,
+          },
+        )
       ).handle(authors);
       const second = (
-        await plant(adapter, [authors], {
-          dryRun: true,
-          namespace: "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14",
-        })
+        await plant(
+          { into: adapter, seeds: [authors] },
+          {
+            dryRun: true,
+            namespace: "b41f0c8a-2d67-4e19-9a3c-5f8e7d206b14",
+          },
+        )
       ).handle(authors);
 
       expect(first.all.map((row) => row.id)).not.toEqual(

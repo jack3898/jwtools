@@ -4,7 +4,7 @@
  */
 import { en, Faker } from "@faker-js/faker";
 import {
-  seeder as define,
+  seed as define,
   memory,
   type SeedConfig,
   type SeedDefinition,
@@ -14,7 +14,7 @@ import type { z } from "zod";
 /** What every seed gets on top of the toolkit. Supplied by `extend` per run. */
 export type Extras = { faker: Faker };
 
-export function seeder<
+export function seed<
   S extends z.ZodObject,
   C extends SeedConfig,
   A extends object,

@@ -20,14 +20,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { engineSuite, harnessSeeds } from "./engine.suite";
 import {
   type Adapter,
-  seeder as define,
+  seed as define,
   plant,
   type SeedConfig,
   type SeedDefinition,
 } from "./index";
 
 /** The README's Drizzle block, verbatim: pins the row type to the table. */
-function seeder<
+function seed<
   T extends PgTable,
   C extends SeedConfig,
   A extends object,
@@ -199,15 +199,18 @@ describe("drizzle specifics", () => {
   it("names seeds after their table in camelCase", async () => {
     const reports: Array<string> = [];
 
-    await plant(adapter, [profiles], {
-      onSeed: (report) => reports.push(`${report.name}:${report.target}`),
-    });
+    await plant(
+      { into: adapter, seeds: [profiles] },
+      {
+        onSeed: (report) => reports.push(`${report.name}:${report.target}`),
+      },
+    );
 
     expect(reports).toEqual(["authors:authors", "profiles:profiles"]);
   });
 
   it("refuses rows a unique constraint silently dropped", async () => {
-    const duplicates = seeder({
+    const duplicates = seed({
       target: authorsTable,
       name: "duplicates",
       build: ({ id }) => [
@@ -216,7 +219,7 @@ describe("drizzle specifics", () => {
       ],
     });
 
-    await expect(plant(adapter, [duplicates])).rejects.toThrow(
+    await expect(plant({ into: adapter, seeds: [duplicates] })).rejects.toThrow(
       'Seed "duplicates" offered 2 rows to authors but 1 are not in it',
     );
   });

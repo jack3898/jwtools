@@ -1,6 +1,6 @@
-import { memory, plant, seeder } from "@jack3898/power-seed";
+import { memory, plant, seed } from "@jack3898/power-seed";
 
-const teams = seeder({
+const teams = seed({
   target: "teams",
   defaults: { names: ["Red", "Blue"] },
   build: ({ config, id }) =>
@@ -10,7 +10,7 @@ const teams = seeder({
   }),
 });
 
-const players = seeder({
+const players = seed({
   target: "players",
   defaults: { perTeam: 3 },
   build: async ({ config, random, id, get }) => {
@@ -27,6 +27,9 @@ const players = seeder({
   },
 });
 
-const bed = await plant(memory(), [teams, players.override({ perTeam: 2 })]);
+const bed = await plant({
+  into: memory(),
+  seeds: [teams, players.override({ perTeam: 2 })],
+});
 
 console.log(bed.handle(teams).all);

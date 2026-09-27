@@ -56,7 +56,7 @@ export type Seed<
 };
 
 export type SeedEntry<S> = {
-  readonly seeder: S;
+  readonly seed: S;
   readonly config: SeedConfig | undefined;
 };
 
@@ -127,7 +127,7 @@ export type SeedDefinition<
 };
 
 /** What a builder calls `get()` on IS its dependency; there is no list. */
-export function seeder<
+export function seed<
   Target,
   Insert extends object,
   C extends SeedConfig,
@@ -138,12 +138,12 @@ export function seeder<
 ): Seed<Target, Insert, A, X, C> {
   const cache = new WeakMap<Run<X>, Promise<Handle<Insert, A>>>();
 
-  const seed: Seed<Target, Insert, A, X, C> = {
+  const created: Seed<Target, Insert, A, X, C> = {
     name: definition.name,
     target: definition.target,
     namespace: definition.namespace,
     defaults: definition.defaults,
-    override: (config) => ({ seeder: seed, config }),
+    override: (config) => ({ seed: created, config }),
     resolve: (run) => {
       const cached = cache.get(run);
 
@@ -160,13 +160,13 @@ export function seeder<
   };
 
   async function build(run: Run<X>): Promise<Handle<Insert, A>> {
-    const name = run.nameOf(seed);
-    const toolkit = run.toolkit(seed);
+    const name = run.nameOf(created);
+    const toolkit = run.toolkit(created);
     // Checked against the defaults when planted, so the cast holds.
     const args = {
       ...toolkit,
-      config: run.configOf(seed) as C,
-      get: run.getFor(seed),
+      config: run.configOf(created) as C,
+      get: run.getFor(created),
     };
     const built = await definition.build(args);
 
@@ -176,7 +176,7 @@ export function seeder<
       ...row,
     }));
 
-    await run.insert(seed, written);
+    await run.insert(created, written);
 
     const { link } = definition;
 
@@ -205,7 +205,7 @@ export function seeder<
     };
   }
 
-  return seed;
+  return created;
 }
 
 export type HandleOf<S> =

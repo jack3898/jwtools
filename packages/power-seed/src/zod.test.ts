@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { engineSuite, harnessSeeds } from "./engine.suite";
 import {
-  seeder as define,
+  seed as define,
   type MemoryStore,
   memory,
   plant,
@@ -12,7 +12,7 @@ import {
 } from "./index";
 
 /** The README's Zod block, verbatim: pins the row type to the schema's input. */
-function seeder<
+function seed<
   S extends z.ZodObject,
   C extends SeedConfig,
   A extends object,
@@ -67,22 +67,24 @@ engineSuite("zod schemas in memory", {
 describe("zod specifics", () => {
   it("validates every row through the schema", async () => {
     const strict = z.object({ name: z.string().min(3) });
-    const tooShort = seeder({
+    const tooShort = seed({
       target: strict,
       name: "tooShort",
       build: () => [{ name: "ab" }],
     });
 
-    await expect(plant(adapter, [tooShort])).rejects.toThrow(/Too small/);
+    await expect(plant({ into: adapter, seeds: [tooShort] })).rejects.toThrow(
+      /Too small/,
+    );
   });
 
   it("requires a name, since a schema has none", async () => {
-    const anonymous = seeder({
+    const anonymous = seed({
       target: z.object({}),
       build: () => [{}],
     });
 
-    await expect(plant(adapter, [anonymous])).rejects.toThrow(
+    await expect(plant({ into: adapter, seeds: [anonymous] })).rejects.toThrow(
       "A seed on a target the adapter cannot name must set `name`",
     );
   });
@@ -115,19 +117,26 @@ describe("zod specifics", () => {
     const names = (rows: ReadonlyArray<{ name: string }>) =>
       rows.map((row) => row.name);
 
-    const first = (await plant(adapter, [people], { extend })).handle(people);
+    const first = (
+      await plant({ into: adapter, seeds: [people] }, { extend })
+    ).handle(people);
 
     store.clear();
 
-    const again = (await plant(adapter, [people], { extend })).handle(people);
+    const again = (
+      await plant({ into: adapter, seeds: [people] }, { extend })
+    ).handle(people);
 
     store.clear();
 
     const other = (
-      await plant(adapter, [people], {
-        extend,
-        seed: 2,
-      })
+      await plant(
+        { into: adapter, seeds: [people] },
+        {
+          extend,
+          seed: 2,
+        },
+      )
     ).handle(people);
 
     expect(names(again.all)).toEqual(names(first.all));

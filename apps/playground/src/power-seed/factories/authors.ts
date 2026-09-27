@@ -1,8 +1,8 @@
 import { authorSchema } from "../schema.js";
-import { seeder } from "../setup.js";
+import { seed } from "../setup.js";
 import { publishers } from "./publishers.js";
 
-export const authors = seeder({
+export const authors = seed({
   target: authorSchema,
   name: "authors",
   defaults: { perPublisher: { min: 2, max: 2 } },
