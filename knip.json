@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "rules": {
+    "optionalPeerDependencies": "off"
+  },
+  "workspaces": {
+    "packages/power-seed": {
+      "entry": ["src/index.ts", "src/zod.ts", "src/drizzle.ts"]
+    }
+  }
+}

@@ -2,24 +2,8 @@ import { en, Faker } from "@faker-js/faker";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { engineSuite, harnessSeeds } from "./engine.suite";
-import {
-  seed as define,
-  type MemoryStore,
-  memory,
-  plant,
-  type SeedConfig,
-  type SeedDefinition,
-} from "./index";
-
-/** The README's Zod block, verbatim: pins the row type to the schema's input. */
-function seed<
-  S extends z.ZodObject,
-  C extends SeedConfig,
-  A extends object,
-  X extends object = object,
->(definition: SeedDefinition<S, z.input<S>, C, A, X>) {
-  return define(definition);
-}
+import { type MemoryStore, plant } from "./index";
+import { seed, seedWith, zodAdapter } from "./zod";
 
 const authorSchema = z.object({
   id: z.string(),
@@ -40,10 +24,7 @@ const profileSchema = z.object({
 });
 
 const store: MemoryStore<z.ZodObject> = new Map();
-const adapter = memory<z.ZodObject>({
-  store,
-  parse: (schema, row) => schema.parse(row),
-});
+const adapter = zodAdapter({ store });
 
 const { authors, books, profiles } = harnessSeeds<z.ZodObject>(
   { authors: authorSchema, books: bookSchema, profiles: profileSchema },
@@ -92,25 +73,19 @@ describe("zod specifics", () => {
   it("takes faker through extend, seeded from the run", async () => {
     type WithFaker = { readonly faker: Faker };
 
-    function defineFakerSeed<
-      S extends z.ZodObject,
-      C extends SeedConfig,
-      A extends object,
-    >(definition: SeedDefinition<S, z.input<S>, C, A, WithFaker>) {
-      return define(definition);
-    }
+    const seedWithFaker = seedWith<WithFaker>();
 
-    const people = defineFakerSeed({
+    const people = seedWithFaker({
       target: z.object({ name: z.string() }),
       name: "people",
       build: ({ faker }) =>
         Array.from({ length: 3 }, () => ({ name: faker.person.fullName() })),
     });
 
-    const extend = ({ seed }: { seed: number }) => {
+    const extend = ({ seed: own }: { seed: number }) => {
       const faker = new Faker({ locale: [en] });
 
-      faker.seed(seed);
+      faker.seed(own);
 
       return { faker };
     };

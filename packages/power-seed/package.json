@@ -32,6 +32,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./drizzle": {
+      "types": "./dist/drizzle.d.ts",
+      "import": "./dist/drizzle.js"
+    },
+    "./zod": {
+      "types": "./dist/zod.d.ts",
+      "import": "./dist/zod.js"
     }
   },
   "devDependencies": {
@@ -42,6 +50,10 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.30.0",
+    "zod": "^4.0.0"
   },
   "files": [
     "./dist",
@@ -64,6 +76,14 @@
     "vanilla",
     "zod"
   ],
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
   "repository": "jack3898/jwtools.git",
   "types": "./dist/index.d.ts"
 }

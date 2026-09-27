@@ -208,6 +208,22 @@ export function seed<
   return created;
 }
 
+/**
+ * `seed` for seeds that need extras. `X` is pinned here, so every seed made
+ * through the result may use it and none can run without an `extend` that
+ * supplies it.
+ */
+export function seedWith<X extends object>() {
+  return <
+    Target,
+    Insert extends object,
+    C extends SeedConfig,
+    A extends object,
+  >(
+    definition: SeedDefinition<Target, Insert, C, A, X>,
+  ): Seed<Target, Insert, A, X, C> => seed(definition);
+}
+
 export type HandleOf<S> =
   S extends Seed<unknown, infer Insert, infer A, never>
     ? Handle<Insert, A>
