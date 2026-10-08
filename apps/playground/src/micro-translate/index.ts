@@ -5,6 +5,7 @@ import {
   todo,
 } from "@jack3898/micro-translate";
 import { num } from "@jack3898/micro-translate/intl/num";
+import { select } from "@jack3898/micro-translate/select";
 
 const { define, tool } = createTranslationConfig({
   languages: {
@@ -55,7 +56,13 @@ const translator = define({
   welcome: { gb: "Welcome!", us: ref("gb"), fr: todo(), ja: todo() },
   carPark: { gb: "Car park", us: "Parking lot", fr: todo(), ja: todo() },
   complex: {
-    gb: msg`You're ${num("distance")} ${suffix("suffix")} away`,
+    gb: msg`You're ${num("distance")} ${suffix("suffix")} away, ${select(
+      "omg",
+      {
+        some: msg`ok ${"mate"}`,
+        none: msg`gg ${"ok"}`,
+      },
+    )}`,
     us: ref("gb"),
     ja: todo(),
     fr: todo(),
@@ -72,5 +79,5 @@ const t = translator("ja");
 
 console.log(t.welcome);
 console.log(t.carPark);
-console.log(t.complex({ distance: 10000 }));
+console.log(t.complex({ distance: 10000, omg: { case: "none", ok: "" } }));
 console.log(t.money({ cost: 1234 }));

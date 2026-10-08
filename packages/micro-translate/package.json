@@ -1,7 +1,7 @@
 {
   "name": "@jack3898/micro-translate",
   "description": "A tiny TypeScript-first translation utility.",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "author": "Jack Wright",
   "license": "Apache-2.0",
   "private": false,
@@ -52,6 +52,10 @@
     "./intl/relative-time": {
       "types": "./dist/intl/relative-time.d.ts",
       "import": "./dist/intl/relative-time.js"
+    },
+    "./select": {
+      "types": "./dist/select.d.ts",
+      "import": "./dist/select.js"
     }
   },
   "devDependencies": {
@@ -62,7 +66,8 @@
   "files": [
     "./dist",
     "./LICENSE",
-    "./README.md"
+    "./README.md",
+    "./CHANGELOG.md"
   ],
   "keywords": [
     "esm",

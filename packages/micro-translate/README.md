@@ -62,7 +62,7 @@ console.log(en.hello({ object: "world" })); // "Hello world!"
 
 ## Formatting with presets
 
-Templates get a whole lot more powerful when you introduce formatters. This supercharges the template strings and allows processing of values. This covers things like number formatting, pluralization, lists, rich text, and more. Best of all, using it is as easy as calling a simple function inside of the template string.
+Templates get a whole lot more powerful when you introduce formatters. This supercharges the template strings and allows processing of values. This covers things like number formatting, pluralization, lists, branching, rich text, and more. Best of all, using it is as easy as calling a simple function inside of the template string.
 
 ### Pluralization
 
@@ -214,6 +214,64 @@ console.log(translator("en-GB").edited({ when: { value: 2, unit: "hour" } })); /
 ```
 
 Pass `{ numeric: "auto" }` to get "yesterday"/"tomorrow" where the locale has them. (Bundling multiple inputs into one parameter is a pattern you can reuse in your own recipes, see below.)
+
+### Branching with select
+
+`select` branches a sentence by a discriminant, like ICU's `select`. In essence, you can nest translations and do conditionals! This one does not use the Intl API, so you can find it at `@jack3898/micro-translate/select`. Each branch is a plain string or a `msg` template which may also contain another `select`. You can go as deep as you want.
+
+```ts
+import { createTranslationConfig, msg } from "@jack3898/micro-translate";
+import { num } from "@jack3898/micro-translate/intl/num";
+import { select } from "@jack3898/micro-translate/select";
+
+const { define } = createTranslationConfig({
+  languages: { "en-GB": {} },
+  default: "en-GB",
+});
+
+const translator = define({
+  shipped: {
+    "en-GB": msg`Your order of ${num("items")} items has shipped${select(
+      "tracking",
+      {
+        some: msg` with tracking number ${"code"}`,
+        none: "",
+      },
+    )}.`,
+  },
+});
+
+console.log(
+  translator("en-GB").shipped({
+    items: 2,
+    tracking: { case: "some", code: "123456" },
+  }),
+); // "Your order of 2 items has shipped with tracking number 123456."
+console.log(
+  translator("en-GB").shipped({ items: 2, tracking: { case: "none" } }),
+); // "Your order of 2 items has shipped."
+```
+
+The parameter is a discriminated union: `case` is one of the branch names, and the rest is that branch's own parameters. Here `some` requires `code`, `none` takes nothing, and passing `code` alongside `none` is an excess-property error.
+
+**Exhaustiveness.** Passing a union or enum as `case` compiles only when every member has a branch:
+
+```ts
+type Status = "active" | "paused" | "archived";
+
+const translator = define({
+  status: {
+    "en-GB": msg`Project is ${select("status", { active: "live", paused: "on hold", archived: "closed" })}`,
+  },
+});
+
+declare const status: Status;
+
+translator("en-GB").status({ status: { case: status } }); // OK, every member has a branch.
+// Drop the archived branch and this line no longer compiles.
+```
+
+**It is string-only for now.** Every branch must render a string, so a template containing a rich formatter (one that renders a React element, say) will currently not work. Maybe support for this will come in the future if it's found to be useful.
 
 ## Writing your own formatters with `tool()`
 

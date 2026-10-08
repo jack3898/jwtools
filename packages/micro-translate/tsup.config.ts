@@ -8,6 +8,7 @@ export default defineConfig({
     "src/intl/date.ts",
     "src/intl/list.ts",
     "src/intl/relative-time.ts",
+    "src/select.ts",
   ],
   format: ["esm"],
   dts: true,
