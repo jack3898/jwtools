@@ -2,7 +2,7 @@ import type { AnyRef, Ref, TodoRef } from "./ref";
 
 export type TranslationValue =
   | string
-  | ((dict: never, locale?: string) => unknown)
+  | ((dict: never, locale?: string, context?: unknown) => unknown)
   | AnyRef;
 
 export type TranslationDict<Language extends string = string> = Record<
@@ -11,12 +11,33 @@ export type TranslationDict<Language extends string = string> = Record<
 >;
 
 /**
- * The function returned by `define(...)`. Give it the active locale and it
- * resolves every key to that locale's value.
+ * The trailing parameter a translator takes for its runtime context:
+ *
+ * - `never` (the bare {@link Translator} default) is a `never[]` rest: callable
+ *   with a locale alone, and a supertype of every translator whatever context
+ *   it takes (an optional `never` would widen to `undefined` and lose that);
+ * - `unknown` (a config that declared no context) is no parameter at all;
+ * - a context that admits `undefined` is optional;
+ * - anything else is required, so forgetting the context is a compile error.
+ */
+export type ContextArgs<Context> = [Context] extends [never]
+  ? never[]
+  : unknown extends Context
+    ? []
+    : undefined extends Context
+      ? [context?: Context]
+      : [context: Context];
+
+/**
+ * The function returned by `define(...)`. Give it the active locale, plus the
+ * runtime context its config declared (if any), and it resolves every key to
+ * that locale's value.
  *
  * Use it to type a value that holds a translator: a prop, a context value, or a
- * `useTranslation` wrapper. Pin your locale union and infer the resolved
- * translations to keep the keys without a type assertion.
+ * `useTranslation` wrapper. Pin your locale union (and the context your wrapper
+ * supplies) and infer the resolved translations to keep the keys without a type
+ * assertion. `Context` defaults to `never`, which makes the bare `Translator` a
+ * supertype of every translator whatever context it takes.
  *
  * @example ```ts
  * type Locale = "en" | "ja";
@@ -30,8 +51,10 @@ export type Translator<
   T extends TranslationDict = TranslationDict,
   Language extends string = string,
   Default extends string = string,
+  Context = never,
 > = <Locale extends Language>(
   locale: Locale,
+  ...context: ContextArgs<Context>
 ) => { [K in keyof T]: ResolveValue<T[K], T[K][Locale], Default> };
 
 export type ResolveValue<Entry, V, Default extends string> = V extends TodoRef

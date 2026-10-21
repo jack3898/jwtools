@@ -6,7 +6,11 @@ const msgBrand = Symbol("micro-translate/msg");
  * The branded template function produced by {@link msg}. You rarely name this
  * directly. It's what a `msg` interpolation resolves to inside a translation.
  */
-export type Msg = ((dict: never, locale?: string) => unknown) & {
+export type Msg = ((
+  dict: never,
+  locale?: string,
+  context?: unknown,
+) => unknown) & {
   [msgBrand]: true;
 };
 
@@ -102,6 +106,7 @@ export function msg<const Keys extends readonly TemplateKey[]>(
       >[K];
     },
     locale?: string,
+    context?: unknown,
   ): unknown => {
     const values = dict as Record<PropertyKey, unknown>;
     const result: unknown[] = [strings[0]];
@@ -109,7 +114,11 @@ export function msg<const Keys extends readonly TemplateKey[]>(
 
     for (const [i, key] of templateKeys.entries()) {
       if (isToolKey(key)) {
-        const formatted = key.format(values[key.name] as never, locale);
+        const formatted = key.format(
+          values[key.name] as never,
+          locale,
+          context,
+        );
 
         if (typeof formatted !== "string") {
           allStrings = false;

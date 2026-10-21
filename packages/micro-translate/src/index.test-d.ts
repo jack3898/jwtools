@@ -88,3 +88,100 @@ describe("config default", () => {
     createTranslationConfig({ languages: { en: {}, jp: {} }, default: "fr" });
   });
 });
+
+describe("runtime context", () => {
+  type Context = { currency: string };
+
+  const { define, tool } = createTranslationConfig<Context>()({
+    languages: { en: {}, jp: {} },
+    default: "en",
+  });
+  const money = <const Name extends string>(name: Name) =>
+    tool(name, (value: number, _locale, _config, context) => {
+      expectTypeOf(context).toEqualTypeOf<Context>();
+
+      return String(value);
+    });
+  const t = define({
+    price: { en: msg`${money("amount")}`, jp: msg`${money("amount")}` },
+    submit: { en: "Submit", jp: "Submitto" },
+  });
+
+  it("requires the context alongside the locale", () => {
+    t("en", { currency: "GBP" });
+
+    // @ts-expect-error - the context is required.
+    t("en");
+
+    // @ts-expect-error - the context must match the declared shape.
+    t("en", { currency: 1 });
+
+    // @ts-expect-error - the context is an exact object.
+    t("en", { currency: "GBP", locale: "en" });
+  });
+
+  it("keeps the config's own inference", () => {
+    expectTypeOf(
+      t("jp", { currency: "JPY" }).submit,
+    ).toEqualTypeOf<"Submitto">();
+    expectTypeOf(t("en", { currency: "GBP" }).price).toEqualTypeOf<
+      (dict: { amount: number }) => string
+    >();
+
+    // @ts-expect-error - "fr" was not configured.
+    t("fr", { currency: "EUR" });
+
+    define({
+      // @ts-expect-error - `jp` is missing.
+      submit: { en: "Submit" },
+    });
+  });
+
+  it("types the translator with its context", () => {
+    expectTypeOf<Parameters<typeof t>>().toEqualTypeOf<
+      [locale: "en" | "jp", context: Context]
+    >();
+  });
+
+  it("makes the context optional when it admits undefined", () => {
+    const { define } = createTranslationConfig<Context | undefined>()({
+      languages: { en: {} },
+      default: "en",
+    });
+    const t = define({ submit: { en: "Submit" } });
+
+    t("en");
+    t("en", undefined);
+    t("en", { currency: "GBP" });
+
+    // @ts-expect-error - the context must still match the declared shape.
+    t("en", { currency: 1 });
+  });
+
+  it("takes no context when none was declared", () => {
+    const { define, tool } = createTranslationConfig({
+      languages: { en: {} },
+      default: "en",
+    });
+    const t = define({ submit: { en: "Submit" } });
+
+    t("en");
+
+    // @ts-expect-error - no context was declared.
+    t("en", { currency: "GBP" });
+
+    // The translator is exactly the locale-only function it was before.
+    expectTypeOf<Parameters<typeof t>>().toEqualTypeOf<[locale: "en"]>();
+
+    // @ts-expect-error - a recipe cannot read a context that was never declared.
+    tool("a", (value: number, _locale, _config, _context) => String(value));
+  });
+
+  it("still requires a declared default in the context form", () => {
+    createTranslationConfig<Context>()({
+      languages: { en: {} },
+      // @ts-expect-error - "fr" is not one of the declared languages.
+      default: "fr",
+    });
+  });
+});

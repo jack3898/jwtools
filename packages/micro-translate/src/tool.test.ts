@@ -147,3 +147,43 @@ describe("tool", () => {
     expect(t("en").place({ place: 1 })).toBe("1st");
   });
 });
+
+describe("tool with a runtime context", () => {
+  const { define, tool } = createTranslationConfig<{ currency: string }>()({
+    languages: { en: { suffix: "!" }, de: { suffix: "." } },
+    default: "en",
+  });
+  const money = <const Name extends string>(name: Name) =>
+    tool(name, (value: number, locale, _config, { currency }) =>
+      new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+        value,
+      ),
+    );
+  const t = define({
+    price: { en: msg`${money("amount")}`, de: ref("en") },
+  });
+
+  it("formats with the context the translator was called with", () => {
+    expect(t("en", { currency: "GBP" }).price({ amount: 9.99 })).toBe("£9.99");
+    expect(t("en", { currency: "USD" }).price({ amount: 9.99 })).toBe("$9.99");
+  });
+
+  it("hands the context to a ref'd recipe under the caller's locale", () => {
+    expect(t("de", { currency: "EUR" }).price({ amount: 9.99 })).toBe(
+      "9,99\u00a0€",
+    );
+  });
+
+  it("passes value, locale, config and context together", () => {
+    const everything = <const Name extends string>(name: Name) =>
+      tool(
+        name,
+        (value: string, locale, config, context) =>
+          `${value}/${locale}/${config.suffix}/${context.currency}`,
+      );
+    const t = define({ k: { en: msg`${everything("v")}`, de: ref("en") } });
+
+    expect(t("en", { currency: "GBP" }).k({ v: "x" })).toBe("x/en/!/GBP");
+    expect(t("de", { currency: "EUR" }).k({ v: "x" })).toBe("x/de/./EUR");
+  });
+});

@@ -81,3 +81,28 @@ console.log(t.welcome);
 console.log(t.carPark);
 console.log(t.complex({ distance: 10000, omg: { case: "none", ok: "" } }));
 console.log(t.money({ cost: 1234 }));
+
+// Values only known at render time, such as the viewer's currency, come from a
+// context declared on the config and handed to the translator with the locale.
+const site = createTranslationConfig<{ currency: string }>()({
+  languages: { gb: {}, fr: {} },
+  default: "gb",
+});
+
+function price<const Name extends string>(name: Name) {
+  return site.tool(name, (value: number, locale, _config, { currency }) =>
+    new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+      value,
+    ),
+  );
+}
+
+const siteTranslator = site.define({
+  total: {
+    gb: msg`Total ${price("amount")}`,
+    fr: msg`Total ${price("amount")}`,
+  },
+});
+
+console.log(siteTranslator("gb", { currency: "GBP" }).total({ amount: 1234 }));
+console.log(siteTranslator("fr", { currency: "EUR" }).total({ amount: 1234 }));

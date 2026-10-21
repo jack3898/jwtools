@@ -145,3 +145,30 @@ describe("rich tool output through define", () => {
     ]);
   });
 });
+
+describe("runtime context", () => {
+  const { define, tool } = createTranslationConfig<{ name: string }>()({
+    languages: { en: {}, jp: {} },
+    default: "en",
+  });
+  const viewer = <const Name extends string>(name: Name) =>
+    tool(name, (_, __, ___, context) => context.name);
+  const translator = define({
+    hello: { en: msg`Hey ${viewer("who")}`, jp: msg`${viewer("who")}さん` },
+    plain: { en: "Plain", jp: "プレーン" },
+  });
+
+  it("binds the context to the translator call that received it", () => {
+    const ada = translator("en", { name: "Ada" });
+    const grace = translator("en", { name: "Grace" });
+
+    expect(ada.hello({})).toBe("Hey Ada");
+    expect(grace.hello({})).toBe("Hey Grace");
+    expect(ada.hello({})).toBe("Hey Ada");
+  });
+
+  it("leaves plain strings and the locale untouched", () => {
+    expect(translator("jp", { name: "Ada" }).plain).toBe("プレーン");
+    expect(translator("jp", { name: "Ada" }).hello({})).toBe("Adaさん");
+  });
+});

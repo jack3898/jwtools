@@ -187,3 +187,41 @@ describe("tool", () => {
     >();
   });
 });
+
+describe("tool with a runtime context", () => {
+  type Context = { currency: string; timeZone?: string };
+
+  const { tool } = createTranslationConfig<Context>()({
+    languages: { en: { suffix: "th" } },
+    default: "en",
+  });
+
+  it("types context as the declared shape in the callback", () => {
+    tool("a", (v: number, locale, config, context) => {
+      expectTypeOf(locale).toEqualTypeOf<"en">();
+      expectTypeOf(config).toEqualTypeOf<{ readonly suffix: "th" }>();
+      expectTypeOf(context).toEqualTypeOf<Context>();
+
+      return String(v);
+    });
+  });
+
+  it("supports progressive callback arity up to the context", () => {
+    tool("a", (v: number) => String(v));
+    tool("a", (v: number, locale) => `${v}${locale}`);
+    tool("a", (v: number, _locale, config) => `${v}${config.suffix}`);
+    tool("a", (v: number, _locale, _config, { currency }) => `${v}${currency}`);
+  });
+
+  it("leaves the key untouched: the context lives on the translator, not the template", () => {
+    const money = tool(
+      "amount",
+      (v: number, _l, _c, { currency }) => `${v}${currency}`,
+    );
+
+    expectTypeOf(money).toEqualTypeOf<ToolKey<"amount", number>>();
+    expectTypeOf(msg`${money}`)
+      .parameter(0)
+      .toEqualTypeOf<{ amount: number }>();
+  });
+});

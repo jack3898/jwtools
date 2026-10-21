@@ -65,3 +65,56 @@ describe("Translation", () => {
     >();
   });
 });
+
+describe("Translator with a runtime context", () => {
+  type Locale = "en" | "jp";
+  type Context = { currency: string };
+
+  const plain = createTranslationConfig({
+    languages: { en: {}, jp: {} },
+    default: "en",
+  });
+  const withContext = createTranslationConfig<Context>()({
+    languages: { en: {}, jp: {} },
+    default: "en",
+  });
+  const t = plain.define({ submit: { en: "Submit", jp: "Submitto" } });
+  const tc = withContext.define({ submit: { en: "Submit", jp: "Submitto" } });
+
+  it("is still assignable to the bare `Translator` type", () => {
+    expectTypeOf(tc).toExtend<Translator>();
+  });
+
+  it("resolves `Translation` for a context-taking translator", () => {
+    expectTypeOf<Translation<typeof tc>["submit"]>().toEqualTypeOf<
+      "Submit" | "Submitto"
+    >();
+  });
+
+  it("fits a wrapper that supplies locale and context", () => {
+    function useTranslation<T>(
+      translator: (locale: Locale, context: Context) => T,
+    ): T {
+      return translator("en", { currency: "GBP" });
+    }
+
+    expectTypeOf(useTranslation(tc).submit).toEqualTypeOf<
+      "Submit" | "Submitto"
+    >();
+    // A translator that takes no context fits the same wrapper.
+    expectTypeOf(useTranslation(t).submit).toEqualTypeOf<
+      "Submit" | "Submitto"
+    >();
+  });
+
+  it("does not fit a wrapper that supplies no context", () => {
+    function useTranslation<T>(translator: (locale: Locale) => T): T {
+      return translator("en");
+    }
+
+    useTranslation(t);
+
+    // @ts-expect-error - the wrapper never passes the context `tc` requires.
+    useTranslation(tc);
+  });
+});

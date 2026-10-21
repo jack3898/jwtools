@@ -12,13 +12,13 @@ const toolBrand = Symbol("micro-translate/tool");
 export type ToolKey<Name extends string = string, V = unknown, Out = string> = {
   [toolBrand]: true;
   name: Name;
-  format: (value: never, locale: string | undefined) => Out;
+  format: (value: never, locale: string | undefined, context: unknown) => Out;
   readonly __value?: V;
 };
 
 export function tool<const Name extends string, V, Out>(
   name: Name,
-  format: (value: V, locale: string | undefined) => Out,
+  format: (value: V, locale: string | undefined, context: unknown) => Out,
 ): ToolKey<Name, V, Out> {
   return { [toolBrand]: true, name, format };
 }

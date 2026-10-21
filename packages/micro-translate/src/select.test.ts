@@ -73,3 +73,37 @@ describe("select", () => {
     ).toThrow(new Error('select("status") has no branch for "deleted"'));
   });
 });
+
+describe("select with a runtime context", () => {
+  const { define, tool } = createTranslationConfig<{ currency: string }>()({
+    languages: { "en-GB": {} },
+    default: "en-GB",
+  });
+  const money = <const Name extends string>(name: Name) =>
+    tool(name, (value: number, locale, _config, { currency }) =>
+      new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+        value,
+      ),
+    );
+  const t = define({
+    total: {
+      "en-GB": msg`Order is ${select("kind", {
+        paid: msg`paid: ${money("amount")}`,
+        free: "free",
+      })}`,
+    },
+  });
+
+  it("hands the context to recipes inside a branch", () => {
+    expect(
+      t("en-GB", { currency: "GBP" }).total({
+        kind: { case: "paid", amount: 5 },
+      }),
+    ).toBe("Order is paid: £5.00");
+    expect(
+      t("en-GB", { currency: "USD" }).total({
+        kind: { case: "paid", amount: 5 },
+      }),
+    ).toBe("Order is paid: US$5.00");
+  });
+});

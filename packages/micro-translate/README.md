@@ -399,6 +399,8 @@ function money<const Name extends string>(name: Name) {
 }
 ```
 
+> If the currency depends on who's looking rather than on the language, that's a [runtime context](#runtime-context-values-you-only-know-at-render-time), not config.
+
 ```ts
 // my-component.ts
 import { msg } from "@jack3898/micro-translate";
@@ -430,6 +432,51 @@ A few things worth knowing:
 - **Keep your language keys literal.** Declaring `languages` as `Record<string, YourShape>` widens the key to `string` and silently turns off language checking (any `default`, any locale, missing keys all compile). Use literal keys: `Record<"en-GB" | "ja-JP", YourShape>` or an inline object.
 - **Reach for an annotation (not `satisfies`) when a recipe indexes config by a runtime value.** The ordinal recipe indexes `config.ordinal[category]` where `category` is computed at runtime, so the config leaf needs the widened type (`OrdinalTable`). Annotating `languages` (as above) gives the recipe that type; `satisfies` would keep the narrow literal and the lookup wouldn't type-check.
 - **Vended tools are bound to their config.** A `tool` recipe reads config from the `createTranslationConfig` it came from, so keep config-coupled recipes in the same `i18n.ts` as their config. (Rendering one outside its translator throws a clear error.)
+
+### Runtime context: values you only know at render time
+
+The translation config by default never changes outside of the user's locale. However, there may be situations where you would want the context to be untethered to the user. This may be something like a site for a SaaS app. You wouldn't format a currency in the context of the user, it would be better to format this in the context of the site because it's the site that recorded the figure. Micro translate supports a context:
+
+```ts
+// i18n.ts
+import { createTranslationConfig } from "@jack3898/micro-translate";
+
+export const { define, tool } = createTranslationConfig<{ currency: string }>()(
+  {
+    languages: { "en-GB": {}, "de-DE": {} },
+    default: "en-GB",
+  },
+);
+
+export const money = <const Name extends string>(name: Name) =>
+  tool(name, (value: number, locale, _config, { currency }) =>
+    new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+      value,
+    ),
+  );
+```
+
+```ts
+// my-component.ts
+import { msg } from "@jack3898/micro-translate";
+import { define, money } from "./i18n";
+
+const translator = define({
+  total: {
+    "en-GB": msg`Total: ${money("amount")}`,
+    "de-DE": msg`Summe: ${money("amount")}`,
+  },
+});
+
+console.log(translator("en-GB", { currency: "GBP" }).total({ amount: 9.99 })); // "Total: £9.99"
+console.log(translator("de-DE", { currency: "EUR" }).total({ amount: 9.99 })); // "Summe: 9,99 €"
+
+translator("en-GB"); // error: Expected 2 arguments, but got 1
+```
+
+A few things worth knowing:
+
+It's important to know that **the type argument goes on an empty call, then the config follows.** This is a TypeScript limitation that even Zustand has to use.
 
 ### Beyond strings: rich values
 
@@ -589,6 +636,25 @@ function MyComponent() {
 ```
 
 They key is that you simply need to provide a mechanism to feed the locale into the translator. If you can solve that, then you're golden. One downside is that each module or block requires you to reach into context of a user to fetch their locale - but that's a small price to pay.
+
+Declared a [runtime context](#runtime-context-values-you-only-know-at-render-time)? The hook is the one place to resolve that too, so no component ever reaches for the viewer's currency itself:
+
+```tsx
+// use-translation.ts
+type Locale = "en-GB" | "ja-JP";
+type Context = { currency: string }; // what your createTranslationConfig declared
+
+export function useTranslation<T>(
+  translator: (locale: Locale, context: Context) => T,
+): T {
+  const locale = useUserLocale();
+  const currency = useSiteCurrency(); // your context's source
+
+  return translator(locale, { currency });
+}
+```
+
+A translator from a config without a context fits the same hook, so you can introduce a context later without touching a component.
 
 ## Colocation - and why it's going to make your life much easier
 

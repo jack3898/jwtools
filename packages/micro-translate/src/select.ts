@@ -1,6 +1,8 @@
 import { type ToolKey, tool } from "./tool";
 
-type SelectBranch = string | ((dict: never, locale?: string) => string);
+type SelectBranch =
+  | string
+  | ((dict: never, locale?: string, context?: unknown) => string);
 
 /**
  * `other` is restricted to a plain string so the open-ended case it unlocks
@@ -51,7 +53,7 @@ export function select<
   const Name extends string,
   const Branches extends SelectBranches,
 >(name: Name, branches: Branches): ToolKey<Name, SelectValue<Branches>> {
-  return tool(name, (value: SelectValue<Branches>, locale) => {
+  return tool(name, (value: SelectValue<Branches>, locale, context) => {
     const branch: SelectBranch | undefined =
       branches[value.case] ?? branches.other;
 
@@ -68,9 +70,8 @@ export function select<
     // The one correlated-union call. The caller built `value` for exactly this
     // branch, proven at the call site through SelectValue, not carried into a
     // lookup keyed at runtime.
-    return (branch as (dict: unknown, locale?: string) => string)(
-      value,
-      locale,
-    );
+    return (
+      branch as (dict: unknown, locale?: string, context?: unknown) => string
+    )(value, locale, context);
   });
 }
