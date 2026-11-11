@@ -62,6 +62,33 @@ bed.handle(players).all; // every player row, as built
 3. A `memory()` adapter was used. A memory adapter in this case is just a sink for the seed data. A adapter sort of acts like a passthrough, where data is sent to your database and also in memory for access in the JS runtime. The default `memory()` adapter skips that passthrough, and just stores the seeded data in memory as we have no database in this example.
 4. We `plant()` the seeds! The seeds get planted into the memory adapter, and then we list each seed we want to plant in the `seeds` array. Using `bed.handle(players).all` we can get all of the players for that seed, as the seed has grown and you can now harvest your data.
 
+## Config in accessors
+
+A handle is a seed's rows plus its accessors, and it is all another seed sees when it calls `get()`. Sometimes a seed's config decides something its dependants need to ask about, but no row records it. For that, `accessors` receives `config` beside `rows`: the same resolved value `build` got for that run, so the defaults, or the defaults merged with whatever `override` was planted.
+
+```ts
+const sites = seed({
+  target: "sites",
+  defaults: { names: ["north", "south"], detailed: ["north"] },
+  build: ({ config, id }) =>
+    config.names.map((name) => ({ id: id(name), name })),
+  accessors: ({ rows, config }) => ({
+    detailed: () => rows.filter((site) => config.detailed.includes(site.name)),
+  }),
+});
+
+const bed = await plant({
+  into: memory(),
+  seeds: [sites.override({ detailed: ["south"] })],
+});
+
+bed.handle(sites).detailed(); // the "south" row
+```
+
+Any seed that does `await get(sites)` can ask the same question, so the setting lives in one place. `config` is typed from `defaults`, exactly as it is in `build`.
+
+Accessors do not get `get`. They are synchronous lookups over their own seed's rows, and `build` is the one place a seed depends on another.
+
 ## Bringing your schema
 
 Out of the box this package ships with Drizzle and Zod support. More adapters are to come.

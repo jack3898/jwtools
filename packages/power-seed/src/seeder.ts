@@ -82,8 +82,18 @@ export type BuildArgs<C extends SeedConfig, X extends object> = Toolkit &
     readonly get: Get<X>;
   };
 
-export type AccessorArgs<Insert extends object, X extends object> = Toolkit &
+/**
+ * No `get`: an accessor is a synchronous lookup over its own seed's rows, and
+ * `get` here would be a second way to depend on another seed, outside `build`.
+ */
+export type AccessorArgs<
+  Insert extends object,
+  C extends SeedConfig,
+  X extends object,
+> = Toolkit &
   X & {
+    /** The run's resolved config, the same value `build` got. */
+    readonly config: C;
     readonly rows: ReadonlyArray<Insert>;
   };
 
@@ -117,8 +127,18 @@ export type SeedDefinition<
   readonly build: (
     args: BuildArgs<C, X>,
   ) => Promise<ReadonlyArray<Insert>> | ReadonlyArray<Insert>;
-  /** Named lookups over this seed's rows, on its handle beside `all`. */
-  readonly accessors?: (args: AccessorArgs<Insert, X>) => A;
+  /**
+   * Named lookups over this seed's rows, on its handle beside `all`. They
+   * also get the run's resolved `config`, the same value `build` got, so a
+   * handle can answer what the config decided and no row records.
+   *
+   * @example ```ts
+   * accessors: ({ rows, config }) => ({
+   *   detailed: () => rows.filter((site) => config.detailed.includes(site.name)),
+   * }),
+   * ```
+   */
+  readonly accessors?: (args: AccessorArgs<Insert, C, X>) => A;
   /**
    * Runs once every seed in the run has inserted, so `get` here may ask for
    * a seed that asks for this one without tripping the cycle guard.
@@ -163,11 +183,8 @@ export function seed<
     const name = run.nameOf(created);
     const toolkit = run.toolkit(created);
     // Checked against the defaults when planted, so the cast holds.
-    const args = {
-      ...toolkit,
-      config: run.configOf(created) as C,
-      get: run.getFor(created),
-    };
+    const config = run.configOf(created) as C;
+    const args = { ...toolkit, config, get: run.getFor(created) };
     const built = await definition.build(args);
 
     // A link's update lands on these, so a dependent holding one sees it.
@@ -186,9 +203,11 @@ export function seed<
       );
     }
 
-    // With no accessors defined, `A` is inferred as `object`, so `{}` is one.
+    // Built from the toolkit, not `args`, so `get` stays out. With no
+    // accessors defined, `A` is inferred as `object`, so `{}` is one.
     const accessors =
-      definition.accessors?.({ ...toolkit, rows: written }) ?? ({} as A);
+      definition.accessors?.({ ...toolkit, config, rows: written }) ??
+      ({} as A);
 
     return {
       ...accessors,

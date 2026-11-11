@@ -312,6 +312,155 @@ describe("config", () => {
   });
 });
 
+describe("accessors", () => {
+  const sites = seed({
+    target: "sites",
+    defaults: {
+      names: ["north", "south"],
+      detailed: ["north"],
+      visits: { min: 1, max: 5 },
+    },
+    build: ({ config, id }) =>
+      config.names.map((name) => ({ id: id(name), name })),
+    accessors: ({ rows, config }) => ({
+      detailed: () =>
+        rows.filter((site) => config.detailed.includes(site.name)),
+      visits: () => config.visits,
+    }),
+  });
+  const names = (rows: ReadonlyArray<{ name: string }>) =>
+    rows.map((row) => row.name);
+
+  it("read the defaults when nothing overrides them", async () => {
+    const handle = (
+      await plant({ into: memory<string>(), seeds: [sites] })
+    ).handle(sites);
+
+    expect(names(handle.detailed())).toEqual(["north"]);
+    expect(handle.visits()).toEqual({ min: 1, max: 5 });
+  });
+
+  it("read the merged config when the seed is overridden, nested keys too", async () => {
+    const handle = (
+      await plant({
+        into: memory<string>(),
+        seeds: [sites.override({ detailed: ["south"], visits: { max: 9 } })],
+      })
+    ).handle(sites);
+
+    expect(names(handle.detailed())).toEqual(["south"]);
+    expect(handle.visits()).toEqual({ min: 1, max: 9 });
+  });
+
+  it("get the very config build got, and no get", async () => {
+    const seen: Array<unknown> = [];
+    const watched = seed({
+      target: "watched",
+      defaults: { range: { min: 1, max: 5 } },
+      build: ({ config }) => {
+        seen.push(config);
+
+        return [];
+      },
+      accessors: (args) => {
+        seen.push(args.config, "get" in args);
+
+        return {};
+      },
+    });
+
+    await plant({
+      into: memory<string>(),
+      seeds: [watched.override({ range: { max: 9 } })],
+    });
+
+    const [built, accessed, hasGet] = seen;
+
+    expect(built).toEqual({ range: { min: 1, max: 9 } });
+    expect(accessed).toBe(built);
+    expect(hasGet).toBe(false);
+  });
+
+  it("answer a dependant from the run's config, planted or only reached", async () => {
+    const surveys = seed({
+      target: "surveys",
+      build: async ({ get, id }) =>
+        (await get(sites)).detailed().map((site) => ({
+          id: id(site.name),
+          siteId: site.id,
+          site: site.name,
+        })),
+    });
+    const sitesOf = (rows: ReadonlyArray<{ site: string }>) =>
+      rows.map((row) => row.site);
+
+    // `sites` is only reached through `surveys`, so it runs on its defaults.
+    const reached = (
+      await plant({ into: memory<string>(), seeds: [surveys] })
+    ).handle(surveys);
+    const planted = (
+      await plant({
+        into: memory<string>(),
+        seeds: [surveys, sites.override({ detailed: ["south"] })],
+      })
+    ).handle(surveys);
+
+    expect(sitesOf(reached.all)).toEqual(["north"]);
+    expect(sitesOf(planted.all)).toEqual(["south"]);
+  });
+
+  it("keep each run's own config when two runs plant one seed at once", async () => {
+    const adapter = memory<string>();
+    const order: Array<string> = [];
+    const slow = seed({
+      target: "slow",
+      defaults: { names: ["north", "south"], detailed: ["north"] },
+      build: async ({ config, id }) => {
+        order.push(`start ${config.detailed.join()}`);
+        // Yields, so the other run's build starts before this one ends.
+        await Promise.resolve();
+        order.push(`end ${config.detailed.join()}`);
+
+        return config.names.map((name) => ({ id: id(name), name }));
+      },
+      accessors: ({ rows, config }) => ({
+        detailed: () =>
+          rows.filter((site) => config.detailed.includes(site.name)),
+      }),
+    });
+
+    const [north, south] = await Promise.all([
+      plant({ into: adapter, seeds: [slow] }),
+      plant({ into: adapter, seeds: [slow.override({ detailed: ["south"] })] }),
+    ]);
+
+    expect(order).toEqual([
+      "start north",
+      "start south",
+      "end north",
+      "end south",
+    ]);
+    expect(names(north.handle(slow).detailed())).toEqual(["north"]);
+    expect(names(south.handle(slow).detailed())).toEqual(["south"]);
+  });
+
+  it("read the config on a dry run too, with nothing written", async () => {
+    const store: MemoryStore<string> = new Map();
+    const handle = (
+      await plant(
+        {
+          into: memory<string>({ store }),
+          seeds: [sites.override({ detailed: ["south"] })],
+        },
+        { dryRun: true },
+      )
+    ).handle(sites);
+
+    expect(names(handle.detailed())).toEqual(["south"]);
+    expect(store.size).toBe(0);
+  });
+});
+
 describe("streams", () => {
   const draw = (target: string) =>
     seed({

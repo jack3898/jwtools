@@ -6,6 +6,7 @@ import { type PgTable, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { expectTypeOf } from "expect-type";
 import { z } from "zod";
 import {
+  type AccessorArgs,
   type ConfigOf,
   type HandleOf,
   memory,
@@ -39,7 +40,7 @@ const people = seed({
 
 describe("seed", () => {
   it("infers the row shape from what build returns", () => {
-    expectTypeOf<HandleOf<typeof people>>().toMatchTypeOf<{
+    expectTypeOf<HandleOf<typeof people>>().toExtend<{
       names: () => Array<string>;
       all: ReadonlyArray<{ name: string; age: number }>;
       first: () => { name: string; age: number };
@@ -64,6 +65,92 @@ describe("seed", () => {
 
         return [{ owner: owners.first().name }];
       },
+    });
+  });
+
+  it("hands accessors the config, typed from defaults", () => {
+    const sites = seed({
+      target: "sites",
+      defaults: { names: ["north", "south"], detailed: ["north"] },
+      build: ({ config }) => config.names.map((name) => ({ name })),
+      accessors: ({ rows, config }) => {
+        expectTypeOf(config).toEqualTypeOf<{
+          names: Array<string>;
+          detailed: Array<string>;
+        }>();
+        expectTypeOf(rows).toEqualTypeOf<ReadonlyArray<{ name: string }>>();
+        // @ts-expect-error a key the seed does not declare
+        config.detialed;
+
+        return {
+          detailed: () =>
+            rows.filter((site) => config.detailed.includes(site.name)),
+        };
+      },
+    });
+
+    // Reading `config` in an accessor leaves `C` as `defaults` gave it.
+    expectTypeOf<ConfigOf<typeof sites>>().toEqualTypeOf<{
+      readonly names?: Array<string>;
+      readonly detailed?: Array<string>;
+    }>();
+    expectTypeOf<HandleOf<typeof sites>>().toExtend<{
+      detailed: () => Array<{ name: string }>;
+    }>();
+  });
+
+  it("types an accessor's config loosely when the seed declares no defaults", () => {
+    seed({
+      target: "bare",
+      build: () => [{ name: "only" }],
+      accessors: ({ rows, config }) => {
+        expectTypeOf(config).toEqualTypeOf<SeedConfig>();
+
+        return { names: () => rows.map((row) => row.name) };
+      },
+    });
+  });
+
+  it("keeps get out of accessors", () => {
+    seed({
+      target: "sites",
+      build: () => [{ name: "north" }],
+      // @ts-expect-error an accessor reads its own seed, so it has no get
+      accessors: ({ get }) => ({ other: () => get }),
+    });
+  });
+
+  it("names accessor args as row, config, then extras", () => {
+    type Site = { readonly name: string };
+    type Config = { readonly detailed: ReadonlyArray<string> };
+    type WithFaker = { readonly faker: { readonly word: () => string } };
+
+    expectTypeOf<AccessorArgs<Site, Config, WithFaker>>().toExtend<{
+      readonly rows: ReadonlyArray<Site>;
+      readonly config: Config;
+      readonly faker: { readonly word: () => string };
+      readonly now: Date;
+    }>();
+    expectTypeOf<AccessorArgs<Site, Config, WithFaker>>().not.toHaveProperty(
+      "get",
+    );
+    // @ts-expect-error extras alone no longer name it: the config comes first
+    expectTypeOf<AccessorArgs<Site, WithFaker>>();
+
+    // A helper written apart from its seed, the reason to name the type.
+    const detailed = ({
+      rows,
+      config,
+    }: AccessorArgs<Site, Config, WithFaker>) => ({
+      detailed: () =>
+        rows.filter((site) => config.detailed.includes(site.name)),
+    });
+
+    seedWith<WithFaker>()({
+      target: "sites",
+      defaults: { detailed: ["north"] },
+      build: ({ faker }): Array<Site> => [{ name: faker.word() }],
+      accessors: detailed,
     });
   });
 
@@ -222,6 +309,70 @@ describe("subpaths", () => {
       target: things,
       // @ts-expect-error the row must match the table's insert model
       build: ({ id }) => [{ id: id("1"), title: 1 }],
+    });
+  });
+
+  it("hand accessors the config on each subpath", () => {
+    zodSeed({
+      target: schema,
+      name: "configured",
+      defaults: { featured: ["ok"] },
+      build: () => [{ title: "ok" }],
+      accessors: ({ rows, config }) => {
+        expectTypeOf(config).toEqualTypeOf<{ featured: Array<string> }>();
+        // @ts-expect-error a key the seed does not declare
+        config.fetured;
+
+        return {
+          featured: () =>
+            rows.filter((row) => config.featured.includes(row.title)),
+        };
+      },
+    });
+    drizzleSeed({
+      target: things,
+      defaults: { featured: ["ok"] },
+      build: ({ id }) => [{ id: id("1"), title: "ok" }],
+      accessors: ({ rows, config }) => {
+        expectTypeOf(config).toEqualTypeOf<{ featured: Array<string> }>();
+        // @ts-expect-error a key the seed does not declare
+        config.fetured;
+
+        return {
+          featured: () =>
+            rows.filter((row) => config.featured.includes(row.title)),
+        };
+      },
+    });
+  });
+
+  it("hand accessors the config beside pinned extras on each subpath", () => {
+    type WithFaker = { readonly faker: { readonly word: () => string } };
+
+    zodSeedWith<WithFaker>()({
+      target: schema,
+      name: "words",
+      defaults: { featured: ["ok"] },
+      build: ({ faker }) => [{ title: faker.word() }],
+      accessors: ({ config, faker }) => {
+        expectTypeOf(config).toEqualTypeOf<{ featured: Array<string> }>();
+        // @ts-expect-error a key the seed does not declare
+        config.fetured;
+
+        return { isFeatured: () => config.featured.includes(faker.word()) };
+      },
+    });
+    drizzleSeedWith<WithFaker>()({
+      target: things,
+      defaults: { featured: ["ok"] },
+      build: ({ id, faker }) => [{ id: id("1"), title: faker.word() }],
+      accessors: ({ config, faker }) => {
+        expectTypeOf(config).toEqualTypeOf<{ featured: Array<string> }>();
+        // @ts-expect-error a key the seed does not declare
+        config.fetured;
+
+        return { isFeatured: () => config.featured.includes(faker.word()) };
+      },
     });
   });
 

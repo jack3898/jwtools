@@ -58,7 +58,8 @@
   "files": [
     "./dist",
     "./LICENSE",
-    "./README.md"
+    "./README.md",
+    "./CHANGELOG.md"
   ],
   "keywords": [
     "database",
